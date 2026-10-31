@@ -12,13 +12,15 @@ use sulfur_minecraft::{
 use crate::{AccountInfo, AccountKind, CoreError, Result, SignInSnapshot, SignInStage, State, SulfurCore};
 
 /// Application (client) ID registered for Sulfur in Microsoft Entra. Set at
-/// build time (`SULFUR_MSA_CLIENT_ID`, or `-Psulfur.msaClientId` with
-/// Gradle); the same variable at run time overrides it for development.
+/// build time (`SULFUR_MSA_CLIENT_ID`, or `sulfur.msaClientId` as a Gradle
+/// property or in `local.properties`); the same variable at run time
+/// overrides it for development. An empty value counts as unset.
 fn client_id() -> Option<String> {
+    let set = |id: &str| Some(id.trim().to_owned()).filter(|id| !id.is_empty());
     std::env::var("SULFUR_MSA_CLIENT_ID")
         .ok()
-        .or(option_env!("SULFUR_MSA_CLIENT_ID").map(str::to_owned))
-        .filter(|id| !id.trim().is_empty())
+        .and_then(|id| set(&id))
+        .or_else(|| option_env!("SULFUR_MSA_CLIENT_ID").and_then(set))
 }
 
 pub(crate) fn microsoft_available() -> bool {

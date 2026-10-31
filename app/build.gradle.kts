@@ -47,11 +47,19 @@ val cargoOutDir = repoRoot.resolve(
 )
 val nativeLib = cargoOutDir.resolve(nativeLibName)
 
+// Per-checkout build settings in the untracked local.properties (key=value).
+val localProperties = java.util.Properties().apply {
+    repoRoot.resolve("local.properties").takeIf { it.isFile }?.reader()?.use { load(it) }
+}
+
 // Microsoft Entra application (client) ID for Microsoft sign-in, approved by
 // Mojang for the Minecraft API. Not a secret, but tied to whoever registered
-// it, so it is passed at build time: -Psulfur.msaClientId=<id> or SULFUR_MSA_CLIENT_ID.
+// it, so it is never committed and is passed at build time, first found wins:
+// -Psulfur.msaClientId=<id>, SULFUR_MSA_CLIENT_ID, or sulfur.msaClientId in local.properties.
 val msaClientId = providers.gradleProperty("sulfur.msaClientId")
     .orElse(providers.environmentVariable("SULFUR_MSA_CLIENT_ID"))
+    .orElse(provider { localProperties.getProperty("sulfur.msaClientId") })
+    .map { it.trim() }
     .getOrElse("")
 
 val cargoBuild by tasks.registering(Exec::class) {
