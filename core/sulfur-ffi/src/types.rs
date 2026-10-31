@@ -34,12 +34,54 @@ pub enum Isolation {
     Shared,
 }
 
-/// User settings, flattened for the UI. Per-version isolation overrides are
-/// managed separately through `SulfurCore::set_version_isolation`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum ColorSource {
+    Seed,
+    Wallpaper,
+    Background,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum GarbageCollector {
+    Auto,
+    G1,
+    Zgc,
+    Shenandoah,
+    Parallel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum LaunchColumn {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum WidgetKind {
+    News,
+    Versions,
+    Note,
+    Links,
+    Markdown,
+}
+
+/// A card on the Launch page.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct LaunchWidget {
+    pub kind: WidgetKind,
+    pub title: String,
+    pub content: String,
+}
+
+/// User settings, flattened for the UI. Per-version overrides are managed
+/// separately through `SulfurCore::set_version_isolation` and
+/// `SulfurCore::set_version_settings`.
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct Settings {
     pub theme: ThemeMode,
     pub seed_color: u32,
+    /// Whether the seed is `seed_color` or sampled from a picture.
+    pub color_source: ColorSource,
     pub high_contrast: bool,
     pub navigation: NavigationPosition,
     /// Picture behind the pages; `None` for none.
@@ -59,10 +101,20 @@ pub struct Settings {
     pub reuse_dirs: Vec<String>,
     pub java_path: Option<String>,
     pub max_memory_mib: u32,
+    /// `-Xms`; 0 leaves it to the JVM.
+    pub min_memory_mib: u32,
     pub window_width: u32,
     pub window_height: u32,
     pub fullscreen: bool,
     pub jvm_args: String,
+    pub game_args: String,
+    pub gc: GarbageCollector,
+    /// A program the game runs through, e.g. `gamemoderun`.
+    pub wrapper_command: String,
+    /// A shell command run before the game starts.
+    pub pre_launch_command: String,
+    /// `NAME=value` lines.
+    pub env_vars: String,
     pub selected_version: Option<String>,
     /// Download a matching Java when none is installed.
     pub auto_java: bool,
@@ -75,6 +127,48 @@ pub struct Settings {
     pub curseforge_api_key: String,
     /// Download Cleanroom without its download page.
     pub cleanroom_direct: bool,
+    /// Side of the Launch page the account and Play button sit on.
+    pub launch_column: LaunchColumn,
+    pub launch_widgets: Vec<LaunchWidget>,
+}
+
+/// One version's overrides; `None` follows the global setting.
+#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
+pub struct VersionSettings {
+    pub java_path: Option<String>,
+    pub max_memory_mib: Option<u32>,
+    pub min_memory_mib: Option<u32>,
+    pub window_width: Option<u32>,
+    pub window_height: Option<u32>,
+    pub fullscreen: Option<bool>,
+    pub jvm_args: Option<String>,
+    pub game_args: Option<String>,
+    pub gc: Option<GarbageCollector>,
+    pub wrapper_command: Option<String>,
+    pub pre_launch_command: Option<String>,
+    pub env_vars: Option<String>,
+    pub log4j_fix: Option<bool>,
+    /// Join this server when the game starts.
+    pub server_address: Option<String>,
+}
+
+/// The desktop's wallpaper: a picture the UI can decode, or a plain color.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct DesktopWallpaper {
+    pub path: Option<String>,
+    /// `0xRRGGBB`.
+    pub color: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct NewsEntry {
+    pub id: String,
+    pub title: String,
+    pub text: String,
+    /// `YYYY-MM-DD`.
+    pub date: String,
+    pub image_url: Option<String>,
+    pub link: String,
 }
 
 #[derive(Clone, Copy, Debug, uniffi::Enum)]
@@ -490,6 +584,11 @@ impl From<&core::Settings> for Settings {
                 core::ThemeMode::Dark => ThemeMode::Dark,
             },
             seed_color: s.appearance.seed_color,
+            color_source: match s.appearance.color_source {
+                core::ColorSource::Seed => ColorSource::Seed,
+                core::ColorSource::Wallpaper => ColorSource::Wallpaper,
+                core::ColorSource::Background => ColorSource::Background,
+            },
             high_contrast: s.appearance.high_contrast,
             navigation: match s.appearance.navigation {
                 core::NavigationPosition::Top => NavigationPosition::Top,
@@ -508,10 +607,16 @@ impl From<&core::Settings> for Settings {
             reuse_dirs: s.game.reuse_dirs.iter().cloned().map(path_string).collect(),
             java_path: s.game.java_path.clone().map(path_string),
             max_memory_mib: s.game.max_memory_mib,
+            min_memory_mib: s.game.min_memory_mib,
             window_width: s.game.window_width,
             window_height: s.game.window_height,
             fullscreen: s.game.fullscreen,
             jvm_args: s.game.jvm_args.clone(),
+            game_args: s.game.game_args.clone(),
+            gc: s.game.gc.into(),
+            wrapper_command: s.game.wrapper_command.clone(),
+            pre_launch_command: s.game.pre_launch_command.clone(),
+            env_vars: s.game.env_vars.clone(),
             selected_version: s.game.selected_version.clone(),
             auto_java: s.game.auto_java,
             log4j_fix: s.game.log4j_fix,
@@ -519,6 +624,11 @@ impl From<&core::Settings> for Settings {
             selected_account: s.account.selected.clone(),
             curseforge_api_key: s.mods.curseforge_api_key.clone(),
             cleanroom_direct: s.mods.cleanroom_direct,
+            launch_column: match s.launch_page.column {
+                core::LaunchColumn::Left => LaunchColumn::Left,
+                core::LaunchColumn::Right => LaunchColumn::Right,
+            },
+            launch_widgets: s.launch_page.widgets.iter().map(Into::into).collect(),
         }
     }
 }
@@ -532,6 +642,11 @@ impl Settings {
             ThemeMode::Dark => core::ThemeMode::Dark,
         };
         target.appearance.seed_color = self.seed_color & 0xFF_FFFF;
+        target.appearance.color_source = match self.color_source {
+            ColorSource::Seed => core::ColorSource::Seed,
+            ColorSource::Wallpaper => core::ColorSource::Wallpaper,
+            ColorSource::Background => core::ColorSource::Background,
+        };
         target.appearance.high_contrast = self.high_contrast;
         target.appearance.navigation = match self.navigation {
             NavigationPosition::Top => core::NavigationPosition::Top,
@@ -553,10 +668,16 @@ impl Settings {
         target.game.reuse_dirs = self.reuse_dirs.into_iter().filter_map(|d| non_empty(Some(d))).collect();
         target.game.java_path = non_empty(self.java_path);
         target.game.max_memory_mib = self.max_memory_mib.max(512);
+        target.game.min_memory_mib = self.min_memory_mib;
         target.game.window_width = self.window_width.max(320);
         target.game.window_height = self.window_height.max(240);
         target.game.fullscreen = self.fullscreen;
         target.game.jvm_args = self.jvm_args;
+        target.game.game_args = self.game_args;
+        target.game.gc = self.gc.into();
+        target.game.wrapper_command = self.wrapper_command.trim().to_owned();
+        target.game.pre_launch_command = self.pre_launch_command;
+        target.game.env_vars = self.env_vars;
         target.game.selected_version = self.selected_version.filter(|v| !v.is_empty());
         target.game.auto_java = self.auto_java;
         target.game.log4j_fix = self.log4j_fix;
@@ -565,6 +686,117 @@ impl Settings {
         target.account.selected = self.selected_account;
         target.mods.curseforge_api_key = self.curseforge_api_key.trim().to_owned();
         target.mods.cleanroom_direct = self.cleanroom_direct;
+        target.launch_page.column = match self.launch_column {
+            LaunchColumn::Left => core::LaunchColumn::Left,
+            LaunchColumn::Right => core::LaunchColumn::Right,
+        };
+        target.launch_page.widgets = self.launch_widgets.into_iter().map(Into::into).collect();
+    }
+}
+
+impl From<core::GarbageCollector> for GarbageCollector {
+    fn from(gc: core::GarbageCollector) -> Self {
+        match gc {
+            core::GarbageCollector::Auto => Self::Auto,
+            core::GarbageCollector::G1 => Self::G1,
+            core::GarbageCollector::Zgc => Self::Zgc,
+            core::GarbageCollector::Shenandoah => Self::Shenandoah,
+            core::GarbageCollector::Parallel => Self::Parallel,
+        }
+    }
+}
+
+impl From<GarbageCollector> for core::GarbageCollector {
+    fn from(gc: GarbageCollector) -> Self {
+        match gc {
+            GarbageCollector::Auto => Self::Auto,
+            GarbageCollector::G1 => Self::G1,
+            GarbageCollector::Zgc => Self::Zgc,
+            GarbageCollector::Shenandoah => Self::Shenandoah,
+            GarbageCollector::Parallel => Self::Parallel,
+        }
+    }
+}
+
+impl From<&core::LaunchWidget> for LaunchWidget {
+    fn from(w: &core::LaunchWidget) -> Self {
+        Self {
+            kind: match w.kind {
+                core::WidgetKind::News => WidgetKind::News,
+                core::WidgetKind::Versions => WidgetKind::Versions,
+                core::WidgetKind::Note => WidgetKind::Note,
+                core::WidgetKind::Links => WidgetKind::Links,
+                core::WidgetKind::Markdown => WidgetKind::Markdown,
+            },
+            title: w.title.clone(),
+            content: w.content.clone(),
+        }
+    }
+}
+
+impl From<LaunchWidget> for core::LaunchWidget {
+    fn from(w: LaunchWidget) -> Self {
+        Self {
+            kind: match w.kind {
+                WidgetKind::News => core::WidgetKind::News,
+                WidgetKind::Versions => core::WidgetKind::Versions,
+                WidgetKind::Note => core::WidgetKind::Note,
+                WidgetKind::Links => core::WidgetKind::Links,
+                WidgetKind::Markdown => core::WidgetKind::Markdown,
+            },
+            title: w.title,
+            content: w.content,
+        }
+    }
+}
+
+impl From<&core::VersionSettings> for VersionSettings {
+    fn from(v: &core::VersionSettings) -> Self {
+        Self {
+            java_path: v.java_path.clone().map(path_string),
+            max_memory_mib: v.max_memory_mib,
+            min_memory_mib: v.min_memory_mib,
+            window_width: v.window_width,
+            window_height: v.window_height,
+            fullscreen: v.fullscreen,
+            jvm_args: v.jvm_args.clone(),
+            game_args: v.game_args.clone(),
+            gc: v.gc.map(Into::into),
+            wrapper_command: v.wrapper_command.clone(),
+            pre_launch_command: v.pre_launch_command.clone(),
+            env_vars: v.env_vars.clone(),
+            log4j_fix: v.log4j_fix,
+            server_address: v.server_address.clone(),
+        }
+    }
+}
+
+impl From<VersionSettings> for core::VersionSettings {
+    /// Blank text counts as "follow the global setting".
+    fn from(v: VersionSettings) -> Self {
+        let text = |t: Option<String>| t.filter(|t| !t.trim().is_empty());
+        Self {
+            java_path: non_empty(v.java_path),
+            max_memory_mib: v.max_memory_mib.map(|m| m.max(512)),
+            min_memory_mib: v.min_memory_mib,
+            window_width: v.window_width.map(|w| w.max(320)),
+            window_height: v.window_height.map(|h| h.max(240)),
+            fullscreen: v.fullscreen,
+            jvm_args: text(v.jvm_args),
+            game_args: text(v.game_args),
+            gc: v.gc.map(Into::into),
+            wrapper_command: text(v.wrapper_command).map(|t| t.trim().to_owned()),
+            pre_launch_command: text(v.pre_launch_command),
+            env_vars: text(v.env_vars),
+            log4j_fix: v.log4j_fix,
+            server_address: text(v.server_address).map(|t| t.trim().to_owned()),
+        }
+    }
+}
+
+impl From<sulfur_minecraft::news::NewsEntry> for NewsEntry {
+    fn from(n: sulfur_minecraft::news::NewsEntry) -> Self {
+        Self { id: n.id, title: n.title, text: n.text, date: n.date, image_url: n.image_url, link: n.link }
     }
 }
 

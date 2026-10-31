@@ -6,10 +6,12 @@ mod accounts;
 pub mod import;
 mod paths;
 mod settings;
+pub mod wallpaper;
 
 pub use accounts::{Accounts, MicrosoftAccount};
 pub use paths::AppDirs;
 pub use settings::{
-    AccountSettings, AppearanceSettings, DownloadSettings, DownloadSource, GameSettings, Isolation, ModSettings, NavigationPosition,
-    Settings, SettingsError, ThemeMode,
+    AccountSettings, AppearanceSettings, ColorSource, DownloadSettings, DownloadSource, GameSettings, GarbageCollector, Isolation,
+    LaunchColumn, LaunchPageSettings, LaunchSettings, LaunchWidget, ModSettings, NavigationPosition, Settings, SettingsError,
+    ThemeMode, VersionSettings, WidgetKind,
 };

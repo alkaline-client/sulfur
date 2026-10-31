@@ -2,6 +2,8 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
+use sulfur_core::GarbageCollector;
+
 use crate::{
     McError, Result,
     account::Account,
@@ -20,9 +22,22 @@ pub struct LaunchOptions {
     pub run_dir: PathBuf,
     pub account: Account,
     pub max_memory_mib: u32,
+    /// Initial heap; 0 leaves it to the JVM.
+    pub min_memory_mib: u32,
     pub resolution: Option<(u32, u32)>,
     pub fullscreen: bool,
     pub extra_jvm_args: Vec<String>,
+    /// Added after the version's own game arguments.
+    pub extra_game_args: Vec<String>,
+    pub gc: GarbageCollector,
+    /// Major version of [`Self::java`], for collector flags it supports.
+    pub java_major: u32,
+    /// Join this server (`host` or `host:port`) once the game has started.
+    pub server: Option<String>,
+    /// A program (and its arguments) the game runs through, e.g. `gamemoderun`.
+    pub wrapper: Vec<String>,
+    /// Extra environment variables for the game.
+    pub env: Vec<(String, String)>,
     /// Apply the Log4Shell fix to versions with a vulnerable Log4j.
     pub log4j_fix: bool,
     pub launcher_name: String,
@@ -34,6 +49,7 @@ pub struct LaunchCommand {
     pub program: PathBuf,
     pub args: Vec<String>,
     pub working_dir: PathBuf,
+    pub env: Vec<(String, String)>,
 }
 
 /// Loads `id` and its `inheritsFrom` chain into one resolved version.
@@ -87,6 +103,11 @@ pub fn build(dir: &GameDir, version: &VersionJson, opts: &LaunchOptions, platfor
     if opts.resolution.is_some() {
         ctx = ctx.with_feature("has_custom_resolution");
     }
+    // 1.20+ joins a server through Quick Play; older versions take --server/--port.
+    let quick_play = opts.server.is_some() && uses_placeholder(version, "${quickPlayMultiplayer}");
+    if quick_play {
+        ctx = ctx.with_feature("is_quick_play_multiplayer");
+    }
     let main_class = version
         .main_class
         .clone()
@@ -137,12 +158,18 @@ pub fn build(dir: &GameDir, version: &VersionJson, opts: &LaunchOptions, platfor
         ("launcher_version", opts.launcher_version.clone()),
         ("resolution_width", width.to_string()),
         ("resolution_height", height.to_string()),
+        ("quickPlayMultiplayer", opts.server.clone().unwrap_or_default()),
     ]);
 
     let mut args = vec![format!("-Xmx{}M", opts.max_memory_mib)];
+    if opts.min_memory_mib > 0 {
+        args.push(format!("-Xms{}M", opts.min_memory_mib.min(opts.max_memory_mib)));
+    }
     if opts.log4j_fix {
         args.extend(log4j_args(dir, version));
     }
+    // The player's own arguments come after the collector's, so they can retune it.
+    args.extend(gc_args(opts.gc, opts.java_major));
     args.extend(opts.extra_jvm_args.iter().cloned());
     let jvm = version.arguments.as_ref().map(|a| evaluate(&a.jvm, &ctx)).unwrap_or_default();
     // Pre-1.13 versions have no JVM arguments of their own; a loader may add
@@ -166,12 +193,101 @@ pub fn build(dir: &GameDir, version: &VersionJson, opts: &LaunchOptions, platfor
     if opts.fullscreen {
         args.push("--fullscreen".into());
     }
+    if let Some(server) = opts.server.as_ref().filter(|_| !quick_play) {
+        let (host, port) = match server.rsplit_once(':') {
+            Some((host, port)) if port.parse::<u16>().is_ok() => (host, port),
+            _ => (server.as_str(), "25565"),
+        };
+        args.extend(["--server", host, "--port", port].map(String::from));
+    }
+    args.extend(opts.extra_game_args.iter().cloned());
 
-    Ok(LaunchCommand {
-        program: opts.java.clone(),
-        args: args.iter().map(|a| substitute(a, &vars)).collect(),
-        working_dir: opts.run_dir.clone(),
+    let mut args: Vec<String> = args.iter().map(|a| substitute(a, &vars)).collect();
+    let mut program = opts.java.clone();
+    if let Some((wrapper, wrapper_args)) = opts.wrapper.split_first() {
+        args.splice(0..0, wrapper_args.iter().cloned().chain([program.to_string_lossy().into_owned()]));
+        program = PathBuf::from(wrapper);
+    }
+    Ok(LaunchCommand { program, args, working_dir: opts.run_dir.clone(), env: opts.env.clone() })
+}
+
+fn uses_placeholder(version: &VersionJson, placeholder: &str) -> bool {
+    version.arguments.as_ref().is_some_and(|a| {
+        a.game.iter().any(|arg| match arg {
+            Argument::Plain(v) => v.contains(placeholder),
+            Argument::Conditional { value, .. } => value.values().iter().any(|v| v.contains(placeholder)),
+        })
     })
+}
+
+/// JVM flags for `gc`. Collectors `java_major` lacks give nothing, so the JVM
+/// falls back to its default instead of refusing to start.
+pub fn gc_args(gc: GarbageCollector, java_major: u32) -> Vec<String> {
+    let flags: &[&str] = match gc {
+        GarbageCollector::Auto => &[],
+        // The official launcher's defaults.
+        GarbageCollector::G1 => &[
+            "-XX:+UnlockExperimentalVMOptions",
+            "-XX:+UseG1GC",
+            "-XX:G1NewSizePercent=20",
+            "-XX:G1ReservePercent=20",
+            "-XX:MaxGCPauseMillis=50",
+            "-XX:G1HeapRegionSize=32M",
+        ],
+        // Generational ZGC is opt-in on Java 21 and 22 and the only mode from 23 on.
+        GarbageCollector::Zgc if (21..23).contains(&java_major) => &["-XX:+UseZGC", "-XX:+ZGenerational"],
+        GarbageCollector::Zgc if java_major >= 17 => &["-XX:+UseZGC"],
+        GarbageCollector::Shenandoah if java_major >= 12 => &["-XX:+UseShenandoahGC"],
+        GarbageCollector::Parallel => &["-XX:+UseParallelGC"],
+        GarbageCollector::Zgc | GarbageCollector::Shenandoah => &[],
+    };
+    flags.iter().map(|f| (*f).to_owned()).collect()
+}
+
+/// Splits a line of arguments at whitespace; single or double quotes keep
+/// spaces inside one argument (`-Dname="a b"` → `-Dname=a b`).
+pub fn split_args(text: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut quote = None;
+    let mut in_arg = false;
+    for c in text.chars() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), c) => current.push(c),
+            (None, '"' | '\'') => {
+                quote = Some(c);
+                in_arg = true;
+            }
+            (None, c) if c.is_whitespace() => {
+                if in_arg {
+                    args.push(std::mem::take(&mut current));
+                    in_arg = false;
+                }
+            }
+            (None, c) => {
+                current.push(c);
+                in_arg = true;
+            }
+        }
+    }
+    if in_arg {
+        args.push(current);
+    }
+    args
+}
+
+/// `NAME=value` lines; blank lines and `#` comments are skipped.
+pub fn parse_env(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter_map(|l| {
+            let (name, value) = l.split_once('=')?;
+            let name = name.trim().strip_prefix("export ").unwrap_or(name.trim()).trim();
+            (!name.is_empty()).then(|| (name.to_owned(), value.trim().to_owned()))
+        })
+        .collect()
 }
 
 /// JVM arguments that close Log4Shell (CVE-2021-44228) for versions whose
@@ -284,9 +400,16 @@ mod tests {
             run_dir: dir.run_dir("x", true),
             account: Account::offline("Steve"),
             max_memory_mib: 1024,
+            min_memory_mib: 0,
             resolution: None,
             fullscreen: false,
             extra_jvm_args: vec![],
+            extra_game_args: vec![],
+            gc: GarbageCollector::Auto,
+            java_major: 8,
+            server: None,
+            wrapper: vec![],
+            env: vec![],
             log4j_fix: false,
             launcher_name: "Sulfur".into(),
             launcher_version: "0.1".into(),
@@ -342,9 +465,16 @@ mod tests {
             run_dir: dir.run_dir("1.21", true),
             account: Account::offline("Steve"),
             max_memory_mib: 2048,
+            min_memory_mib: 0,
             resolution: None,
             fullscreen: false,
             extra_jvm_args: vec![],
+            extra_game_args: vec![],
+            gc: GarbageCollector::Auto,
+            java_major: 21,
+            server: None,
+            wrapper: vec![],
+            env: vec![],
             log4j_fix: true,
             launcher_name: "Sulfur".into(),
             launcher_version: "0.1".into(),
@@ -360,5 +490,68 @@ mod tests {
         let opts = LaunchOptions { resolution: Some((1280, 720)), ..opts };
         let cmd = build(&dir, &version, &opts, linux).unwrap();
         assert_eq!(&cmd.args[cmd.args.len() - 2..], ["--width", "1280"]);
+
+        let opts = LaunchOptions {
+            min_memory_mib: 1024,
+            gc: GarbageCollector::Zgc,
+            extra_jvm_args: split_args("-Dsulfur.test=\"a b\""),
+            extra_game_args: vec!["--demo".into()],
+            server: Some("mc.example.com".into()),
+            wrapper: split_args("gamemoderun"),
+            env: parse_env("MESA_GL_VERSION_OVERRIDE=4.5"),
+            ..opts
+        };
+        let cmd = build(&dir, &version, &opts, linux).unwrap();
+        assert_eq!(cmd.program, PathBuf::from("gamemoderun"));
+        assert_eq!(&cmd.args[..6], ["/usr/bin/java", "-Xmx2048M", "-Xms1024M", "-XX:+UseZGC", "-XX:+ZGenerational", "-Dsulfur.test=a b"]);
+        assert_eq!(&cmd.args[cmd.args.len() - 5..], ["--server", "mc.example.com", "--port", "25565", "--demo"]);
+        assert_eq!(cmd.env, [("MESA_GL_VERSION_OVERRIDE".to_owned(), "4.5".to_owned())]);
+    }
+
+    #[test]
+    fn joins_servers_through_quick_play_where_the_version_has_it() {
+        let version: VersionJson = serde_json::from_str(
+            r#"{"id":"1.21","mainClass":"M","arguments":{"jvm":["-cp","${classpath}"],"game":[
+              {"rules":[{"action":"allow","features":{"is_quick_play_multiplayer":true}}],
+               "value":["--quickPlayMultiplayer","${quickPlayMultiplayer}"]}]},"libraries":[]}"#,
+        )
+        .unwrap();
+        let dir = GameDir::new(std::env::temp_dir().join("g"));
+        let opts = LaunchOptions {
+            java: "java".into(),
+            run_dir: dir.run_dir("1.21", true),
+            account: Account::offline("Steve"),
+            max_memory_mib: 2048,
+            min_memory_mib: 0,
+            resolution: None,
+            fullscreen: false,
+            extra_jvm_args: vec![],
+            extra_game_args: vec![],
+            gc: GarbageCollector::Auto,
+            java_major: 21,
+            server: Some("play.example.com:25570".into()),
+            wrapper: vec![],
+            env: vec![],
+            log4j_fix: false,
+            launcher_name: "Sulfur".into(),
+            launcher_version: "0.1".into(),
+        };
+        let cmd = build(&dir, &version, &opts, Platform { os: Os::Linux, arch: Arch::X86_64 }).unwrap();
+        assert_eq!(&cmd.args[cmd.args.len() - 2..], ["--quickPlayMultiplayer", "play.example.com:25570"]);
+        assert!(!cmd.args.contains(&"--server".to_owned()));
+    }
+
+    #[test]
+    fn splits_arguments_and_picks_collector_flags() {
+        assert_eq!(split_args("  -Xss2M  -Da='x y' \"\" -Db=\"1\"2 "), ["-Xss2M", "-Da=x y", "", "-Db=12"]);
+        assert!(split_args("   ").is_empty());
+        assert_eq!(gc_args(GarbageCollector::Zgc, 25), ["-XX:+UseZGC"]);
+        assert!(gc_args(GarbageCollector::Zgc, 8).is_empty());
+        assert!(gc_args(GarbageCollector::Shenandoah, 8).is_empty());
+        assert_eq!(gc_args(GarbageCollector::G1, 8)[1], "-XX:+UseG1GC");
+        assert_eq!(
+            parse_env("# comment\nexport A=1\n\nB = two words\nbroken\n"),
+            [("A".to_owned(), "1".to_owned()), ("B".to_owned(), "two words".to_owned())]
+        );
     }
 }

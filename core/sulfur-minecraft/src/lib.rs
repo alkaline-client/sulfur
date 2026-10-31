@@ -7,6 +7,7 @@
 //! * [`loader`]: Fabric, Legacy Fabric, Ornithe, Quilt, Forge, NeoForge, Cleanroom, Rift and OptiFine.
 //! * [`runtime`]: Java runtimes downloaded on demand.
 //! * [`groups`], [`banners`]: the version list as major updates with artwork.
+//! * [`news`]: Java Edition news from the official launcher's feed.
 //! * [`omniarchive`]: lost versions preserved by Omniarchive.
 //! * [`region`]: where offline accounts are allowed.
 //! * [`msa`]: Microsoft account sign-in.
@@ -23,6 +24,7 @@ pub mod library;
 pub mod loader;
 pub mod manifest;
 pub mod msa;
+pub mod news;
 pub mod omniarchive;
 pub mod platform;
 pub mod process;

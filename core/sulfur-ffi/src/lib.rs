@@ -26,7 +26,7 @@ use sulfur_minecraft::{
     layout::{self, GameDir},
     loader,
     manifest::{ManifestVersion, VersionManifest},
-    omniarchive,
+    news, omniarchive,
     platform::Platform,
     process::GameProcess,
     region::Region,
@@ -57,6 +57,7 @@ struct State {
     installs: Mutex<HashMap<String, Arc<InstallTask>>>,
     banners: Mutex<Option<Vec<Banner>>>,
     archive: Mutex<Option<Vec<omniarchive::ArchivedJar>>>,
+    news: Mutex<Option<Vec<NewsEntry>>>,
     region: Region,
     accounts: Mutex<sulfur_core::Accounts>,
 }
@@ -95,6 +96,7 @@ impl SulfurCore {
                 installs: Mutex::new(HashMap::new()),
                 banners: Mutex::new(None),
                 archive: Mutex::new(None),
+                news: Mutex::new(None),
                 region: Region::detect(),
                 accounts: Mutex::new(accounts),
             }),
@@ -245,6 +247,77 @@ impl SulfurCore {
         };
         settings.save(&self.state.dirs.settings_file())?;
         Ok(())
+    }
+
+    /// One version's overrides of the game and Java settings.
+    pub fn version_settings(&self, version_id: String) -> VersionSettings {
+        let settings = self.state.settings.read().unwrap();
+        settings.game.version_settings.get(&version_id).map(Into::into).unwrap_or_default()
+    }
+
+    /// Replaces one version's overrides; all `None` removes them.
+    pub fn set_version_settings(&self, version_id: String, overrides: VersionSettings) -> Result<()> {
+        let overrides = sulfur_core::VersionSettings::from(overrides);
+        let mut settings = self.state.settings.write().unwrap();
+        if overrides.is_empty() {
+            settings.game.version_settings.remove(&version_id);
+        } else {
+            settings.game.version_settings.insert(version_id, overrides);
+        }
+        settings.save(&self.state.dirs.settings_file())?;
+        Ok(())
+    }
+
+    /// The desktop's wallpaper, converted to a format the UI decodes when
+    /// needed. Runs a few short system commands; call it off the UI thread.
+    pub fn desktop_wallpaper(&self) -> Option<DesktopWallpaper> {
+        match sulfur_core::wallpaper::detect()? {
+            sulfur_core::wallpaper::Wallpaper::Color(rgb) => Some(DesktopWallpaper { path: None, color: Some(rgb) }),
+            sulfur_core::wallpaper::Wallpaper::Image(path) => {
+                let usable = sulfur_core::wallpaper::decodable(&path, &self.state.dirs.cache.join("wallpaper"))?;
+                Some(DesktopWallpaper { path: Some(path_string(usable)), color: None })
+            }
+        }
+    }
+
+    /// Java Edition news from the official launcher's feed, newest first.
+    pub async fn launcher_news(&self, refresh: bool) -> Result<Vec<NewsEntry>> {
+        if !refresh && let Some(cached) = self.state.news.lock().unwrap().clone() {
+            return Ok(cached);
+        }
+        let state = self.state.clone();
+        self.runtime
+            .spawn(async move {
+                let downloader = state.downloader.read().unwrap().clone();
+                let news: Vec<NewsEntry> = news::fetch(&downloader, &CancellationToken::new())
+                    .await?
+                    .into_iter()
+                    .map(Into::into)
+                    .collect();
+                *state.news.lock().unwrap() = Some(news.clone());
+                Ok(news)
+            })
+            .await?
+    }
+
+    /// A text document for the Launch page: a local file, or an `https` page
+    /// of at most 512 KiB.
+    pub async fn read_document(&self, location: String) -> Result<String> {
+        const LIMIT: usize = 512 * 1024;
+        let location = location.trim().to_owned();
+        if !location.starts_with("https://") {
+            let path = std::path::PathBuf::from(location.strip_prefix("file://").unwrap_or(&location));
+            let bytes = std::fs::read(&path).map_err(|e| CoreError::Io(format!("{}: {e}", path.display())))?;
+            return Ok(String::from_utf8_lossy(&bytes[..bytes.len().min(LIMIT)]).into_owned());
+        }
+        let state = self.state.clone();
+        self.runtime
+            .spawn(async move {
+                let downloader = state.downloader.read().unwrap().clone();
+                let bytes = downloader.fetch(&location, &CancellationToken::new()).await?;
+                Ok(String::from_utf8_lossy(&bytes[..bytes.len().min(LIMIT)]).into_owned())
+            })
+            .await?
     }
 
     /// The Minecraft version list. Uses the in-memory copy unless `refresh`;
@@ -514,8 +587,11 @@ impl SulfurCore {
                 let dir = state.game_dir();
                 let version = launch::load_version(&dir, &version_id)?;
                 let settings = state.settings.read().unwrap().clone();
-                let java = state.find_java(&settings, &version_id, version.java_major()).await?;
-                if settings.game.log4j_fix {
+                let game = settings.game.launch_settings(&version_id);
+                let java = state
+                    .find_java(game.java_path.as_deref(), settings.game.auto_java, &version_id, version.java_major())
+                    .await?;
+                if game.log4j_fix {
                     state.ensure_log_config(&dir, &version).await;
                 }
                 let isolated = settings.game.isolation_for(&version_id) == sulfur_core::Isolation::Isolated;
@@ -523,18 +599,27 @@ impl SulfurCore {
                     java: java.path.clone(),
                     run_dir: dir.run_dir(&version_id, isolated),
                     account,
-                    max_memory_mib: settings.game.max_memory_mib,
-                    resolution: (!settings.game.fullscreen)
-                        .then_some((settings.game.window_width, settings.game.window_height)),
-                    fullscreen: settings.game.fullscreen,
-                    extra_jvm_args: settings.game.jvm_args.split_whitespace().map(String::from).collect(),
-                    log4j_fix: settings.game.log4j_fix,
+                    max_memory_mib: game.max_memory_mib,
+                    min_memory_mib: game.min_memory_mib,
+                    resolution: (!game.fullscreen).then_some((game.window_width, game.window_height)),
+                    fullscreen: game.fullscreen,
+                    extra_jvm_args: launch::split_args(&game.jvm_args),
+                    extra_game_args: launch::split_args(&game.game_args),
+                    gc: game.gc,
+                    java_major: java.major,
+                    server: Some(game.server_address.clone()).filter(|s| !s.is_empty()),
+                    wrapper: launch::split_args(&game.wrapper_command),
+                    env: launch::parse_env(&game.env_vars),
+                    log4j_fix: game.log4j_fix,
                     launcher_name: "Sulfur".into(),
                     launcher_version: env!("CARGO_PKG_VERSION").into(),
                 };
                 launch::prepare_jar(&dir, &version)?;
                 sulfur_minecraft::install::ensure_natives(&dir, &version, Platform::current())?;
                 let command = launch::build(&dir, &version, &options, Platform::current())?;
+                if !game.pre_launch_command.trim().is_empty() {
+                    pre_launch(&game.pre_launch_command, &version_id, &options).await?;
+                }
                 let process = GameProcess::spawn(&command)?;
                 Ok(Arc::new(GameSession { version_id, process }))
             })
@@ -555,7 +640,9 @@ pub(crate) async fn install_job(
     let Some(request) = loader else { return Ok(()) };
     job.monitor.set_stage(sulfur_minecraft::install::InstallStage::Loader);
     let settings = state.settings.read().unwrap().clone();
-    let java = state.find_java(&settings, &entry.id, version.java_major()).await?;
+    let java = state
+        .find_java(settings.game.java_path.as_deref(), settings.game.auto_java, &entry.id, version.java_major())
+        .await?;
     installer
         .install_loader(request, &java.path, &state.dirs.cache, &job.monitor, &job.cancel)
         .await?;
@@ -573,6 +660,41 @@ pub(crate) async fn install_job(
             // The version works without it; mods that need it will say so.
             tracing::warn!(error = %e, "could not add Fabric API");
         }
+    }
+    Ok(())
+}
+
+/// Runs the player's pre-launch command through the system shell in the
+/// game's folder and waits for it. It sees the game's environment plus the
+/// `INST_*` variables MultiMC and Prism set, so scripts written for them work.
+async fn pre_launch(command: &str, version_id: &str, options: &launch::LaunchOptions) -> Result<()> {
+    std::fs::create_dir_all(&options.run_dir).map_err(|e| CoreError::Io(format!("{}: {e}", options.run_dir.display())))?;
+    #[cfg(windows)]
+    let mut shell = {
+        let mut shell = tokio::process::Command::new("cmd");
+        shell.arg("/C").raw_arg(command).creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        shell
+    };
+    #[cfg(not(windows))]
+    let mut shell = {
+        let mut shell = tokio::process::Command::new("sh");
+        shell.arg("-c").arg(command);
+        shell
+    };
+    let status = shell
+        .current_dir(&options.run_dir)
+        .envs(options.env.iter().map(|(k, v)| (k, v)))
+        .env("INST_NAME", version_id)
+        .env("INST_ID", version_id)
+        .env("INST_DIR", &options.run_dir)
+        .env("INST_MC_DIR", &options.run_dir)
+        .env("INST_JAVA", &options.java)
+        .stdin(std::process::Stdio::null())
+        .status()
+        .await
+        .map_err(|e| CoreError::Other(format!("the pre-launch command could not start: {e}")))?;
+    if !status.success() {
+        return Err(CoreError::Other(format!("the pre-launch command failed ({status})")));
     }
     Ok(())
 }
@@ -650,8 +772,14 @@ impl State {
     /// The configured Java, or the best one for `required`: an installed
     /// runtime that fits (see [`java::pick_compatible`]), else a download of
     /// exactly that version when allowed, else the closest newer one.
-    async fn find_java(&self, settings: &sulfur_core::Settings, version_id: &str, required: u32) -> Result<java::JavaInstall> {
-        let java = match &settings.game.java_path {
+    async fn find_java(
+        &self,
+        java_path: Option<&std::path::Path>,
+        auto_java: bool,
+        version_id: &str,
+        required: u32,
+    ) -> Result<java::JavaInstall> {
+        let java = match java_path {
             Some(path) => java::probe(path)
                 .await
                 .ok_or_else(|| CoreError::Java(format!("{} is not a working Java", path.display())))?,
@@ -660,7 +788,7 @@ impl State {
                 let all = java::discover_in(runtime::executables(&self.dirs.java_dir())).await;
                 match java::pick_compatible(&all, required, platform) {
                     Some(java) => java.clone(),
-                    None if settings.game.auto_java && runtime::OFFERED.contains(&required) => {
+                    None if auto_java && runtime::OFFERED.contains(&required) => {
                         let (task, started) = self.java_task(required);
                         let result = if started {
                             let result = self.download_java(required, &task).await;

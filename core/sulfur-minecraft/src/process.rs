@@ -38,6 +38,7 @@ impl GameProcess {
         let mut command = Command::new(&cmd.program);
         command
             .args(&cmd.args)
+            .envs(cmd.env.iter().map(|(k, v)| (k, v)))
             .current_dir(&cmd.working_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
