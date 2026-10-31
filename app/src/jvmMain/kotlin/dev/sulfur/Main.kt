@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -17,6 +18,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import dev.sulfur.data.ImageCache
 import dev.sulfur.data.SulfurRepository
+import dev.sulfur.data.ThemeColors
 import dev.sulfur.feature.download.DownloadViewModel
 import dev.sulfur.feature.launch.LaunchViewModel
 import dev.sulfur.feature.misc.MiscViewModel
@@ -52,6 +54,7 @@ class AppContainer(val core: SulfurCore) {
     val mods = ModsViewModel(repository, scope)
     val modpacks = ModpacksViewModel(repository, scope)
     val images = ImageCache(repository)
+    val themeColors = ThemeColors(repository, scope)
 
     fun close() {
         scope.cancel()
@@ -99,10 +102,14 @@ fun main() {
                 window.iconImage = logo.toAwtImage(density, LayoutDirection.Ltr, Size(256f, 256f))
             }
             val settings by app.repository.settings.collectAsState()
+            val seed by app.themeColors.seed.collectAsState()
+            // A wallpaper changed while Sulfur was in the background recolors it on return.
+            val focused = LocalWindowInfo.current.isWindowFocused
+            LaunchedEffect(focused) { if (focused) app.themeColors.refreshWallpaper() }
             LocalizedApp(settings.language) {
                 SulfurTheme(
                     theme = settings.theme,
-                    seed = settings.seedColor.toLong(),
+                    seed = seed,
                     highContrast = settings.highContrast,
                 ) {
                     WindowFrame(window, onClose = quit) {

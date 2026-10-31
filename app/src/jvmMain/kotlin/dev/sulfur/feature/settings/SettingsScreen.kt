@@ -49,6 +49,22 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.sulfur.data.SulfurRepository
+import dev.sulfur.data.ThemeColors
+import dev.sulfur.ffi.ColorSource
+import dev.sulfur.ffi.GarbageCollector
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.sulfur.resources.ic_science
+import dev.sulfur.resources.settings_advanced
+import dev.sulfur.resources.settings_background_use_wallpaper
+import dev.sulfur.resources.settings_color_background_hint
+import dev.sulfur.resources.settings_color_background_none
+import dev.sulfur.resources.settings_color_source_seed
+import dev.sulfur.resources.settings_color_source_wallpaper
+import dev.sulfur.resources.settings_color_wallpaper_hint
+import dev.sulfur.resources.settings_color_wallpaper_none
+import dev.sulfur.resources.settings_game_args
+import dev.sulfur.resources.settings_min_memory
+import dev.sulfur.resources.settings_min_memory_hint
 import dev.sulfur.feature.misc.MiscViewModel
 import dev.sulfur.ffi.DownloadSource
 import dev.sulfur.ffi.Isolation
@@ -210,7 +226,7 @@ private enum class Category(val title: StringResource, val icon: DrawableResourc
 }
 
 @Composable
-fun SettingsScreen(repository: SulfurRepository, misc: MiscViewModel) {
+fun SettingsScreen(repository: SulfurRepository, misc: MiscViewModel, themeColors: ThemeColors) {
     val settings by repository.settings.collectAsState()
     val update: Update = repository::updateSettings
     var category by rememberSaveable { mutableStateOf(Category.Appearance) }
@@ -243,9 +259,9 @@ fun SettingsScreen(repository: SulfurRepository, misc: MiscViewModel) {
                 when (shown) {
                     Category.Appearance -> {
                         LanguageSection(settings, update)
-                        ThemeSection(settings, update)
+                        ThemeSection(settings, update, themeColors)
                         LayoutSection(settings, update)
-                        BackgroundSection(settings, update)
+                        BackgroundSection(settings, update, repository)
                     }
                     Category.Game -> {
                         GameFolderSection(settings, update)
@@ -255,6 +271,7 @@ fun SettingsScreen(repository: SulfurRepository, misc: MiscViewModel) {
                     Category.Java -> {
                         JavaRuntimeSection(settings, update, misc, repository)
                         JvmSection(settings, update)
+                        AdvancedSection(settings, update)
                     }
                     Category.Download -> {
                         DownloadSection(settings, update)
@@ -286,7 +303,7 @@ private fun LanguageSection(settings: Settings, update: Update) {
 }
 
 @Composable
-private fun ThemeSection(settings: Settings, update: Update) {
+private fun ThemeSection(settings: Settings, update: Update, themeColors: ThemeColors) {
     SectionCard(stringResource(Res.string.settings_theme_and_color), icon = painterResource(Res.drawable.ic_palette)) {
         Label(stringResource(Res.string.settings_theme))
         ConnectedChoice(
@@ -311,20 +328,56 @@ private fun ThemeSection(settings: Settings, update: Update) {
             onSelect = { mode -> update { it.copy(theme = mode) } },
         )
         Label(stringResource(Res.string.settings_color))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SeedColors.forEach { rgb ->
-                val selected = settings.seedColor.toLong() == rgb
-                // The chosen swatch turns into a spinning expressive cookie shape.
-                val size by animateDpAsState(if (selected) 40.dp else 32.dp, MaterialTheme.motionScheme.fastSpatialSpec())
-                val turn by animateFloatAsState(if (selected) 90f else 0f, MaterialTheme.motionScheme.defaultSpatialSpec())
-                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                    Box(
-                        Modifier.size(size).rotate(turn)
-                            .clip((if (selected) MaterialShapes.Cookie9Sided else MaterialShapes.Circle).toShape())
-                            .background(seedColor(rgb))
-                            .clickable { update { it.copy(seedColor = rgb.toUInt()) } }
-                    )
+        ConnectedChoice(
+            options = ColorSource.entries,
+            selected = settings.colorSource,
+            label = {
+                stringResource(
+                    when (it) {
+                        ColorSource.SEED -> Res.string.settings_color_source_seed
+                        ColorSource.WALLPAPER -> Res.string.settings_color_source_wallpaper
+                        ColorSource.BACKGROUND -> Res.string.settings_background
+                    }
+                )
+            },
+            onSelect = { source -> update { it.copy(colorSource = source) } },
+            fill = false,
+        )
+        if (settings.colorSource == ColorSource.SEED) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SeedColors.forEach { rgb ->
+                    val selected = settings.seedColor.toLong() == rgb
+                    // The chosen swatch turns into a spinning expressive cookie shape.
+                    val size by animateDpAsState(if (selected) 40.dp else 32.dp, MaterialTheme.motionScheme.fastSpatialSpec())
+                    val turn by animateFloatAsState(if (selected) 90f else 0f, MaterialTheme.motionScheme.defaultSpatialSpec())
+                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(size).graphicsLayer { rotationZ = turn }
+                                .clip((if (selected) MaterialShapes.Cookie9Sided else MaterialShapes.Circle).toShape())
+                                .background(seedColor(rgb))
+                                .clickable { update { it.copy(seedColor = rgb.toUInt()) } }
+                        )
+                    }
                 }
+            }
+        } else {
+            val sampled by themeColors.sampled.collectAsState()
+            val color = sampled[settings.colorSource]
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier.size(40.dp).clip(MaterialShapes.Cookie9Sided.toShape())
+                        .background(seedColor(color ?: settings.seedColor.toLong()))
+                )
+                Hint(
+                    stringResource(
+                        when {
+                            settings.colorSource == ColorSource.WALLPAPER && color != null -> Res.string.settings_color_wallpaper_hint
+                            settings.colorSource == ColorSource.WALLPAPER -> Res.string.settings_color_wallpaper_none
+                            color != null -> Res.string.settings_color_background_hint
+                            else -> Res.string.settings_color_background_none
+                        }
+                    )
+                )
             }
         }
         SwitchRow(
@@ -352,8 +405,9 @@ private fun LayoutSection(settings: Settings, update: Update) {
 }
 
 @Composable
-private fun BackgroundSection(settings: Settings, update: Update) {
+private fun BackgroundSection(settings: Settings, update: Update, repository: SulfurRepository) {
     val chooseTitle = stringResource(Res.string.settings_background_choose)
+    val scope = rememberCoroutineScope()
     SectionCard(stringResource(Res.string.settings_background), icon = painterResource(Res.drawable.ic_layers)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val preview by rememberBackgroundImage(settings.backgroundImage, 0f)
@@ -379,6 +433,11 @@ private fun BackgroundSection(settings: Settings, update: Update) {
                         },
                         shapes = ButtonDefaults.shapes(),
                     ) { Text(chooseTitle) }
+                    TextButton(onClick = {
+                        scope.launch {
+                            repository.desktopWallpaper()?.path?.let { path -> update { it.copy(backgroundImage = path) } }
+                        }
+                    }) { Text(stringResource(Res.string.settings_background_use_wallpaper)) }
                     if (settings.backgroundImage != null) {
                         TextButton(onClick = { update { it.copy(backgroundImage = null) } }) {
                             Text(stringResource(Res.string.settings_background_remove))
@@ -446,6 +505,12 @@ private fun WindowSection(settings: Settings, update: Update) {
             itemVerticalAlignment = Alignment.CenterVertically) {
             NumberField(stringResource(Res.string.settings_width), settings.windowWidth, Modifier.width(120.dp)) { v -> update { it.copy(windowWidth = v) } }
             NumberField(stringResource(Res.string.settings_height), settings.windowHeight, Modifier.width(120.dp)) { v -> update { it.copy(windowHeight = v) } }
+            OptionalNumberField(
+                stringResource(Res.string.settings_min_memory),
+                settings.minMemoryMib.takeIf { it > 0u },
+                stringResource(Res.string.settings_min_memory_hint),
+                Modifier.width(220.dp),
+            ) { v -> update { it.copy(minMemoryMib = v ?: 0u) } }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(settings.fullscreen, onCheckedChange = { v -> update { it.copy(fullscreen = v) } })
                 Spacer(Modifier.width(8.dp))
@@ -504,6 +569,7 @@ private fun JvmSection(settings: Settings, update: Update) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        OptionField(settings.gameArgs, { args -> update { it.copy(gameArgs = args) } }, stringResource(Res.string.settings_game_args))
         SwitchRow(
             title = stringResource(Res.string.settings_log4j),
             subtitle = stringResource(Res.string.settings_log4j_hint),
@@ -516,43 +582,24 @@ private fun JvmSection(settings: Settings, update: Update) {
 @Composable
 private fun JavaPicker(settings: Settings, update: Update, misc: MiscViewModel) {
     val runtimes by misc.java.collectAsState()
-    var open by remember { mutableStateOf(false) }
-    val auto = stringResource(Res.string.settings_java_auto)
-    val managedLabel = stringResource(Res.string.settings_java_downloaded)
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        OutlinedTextField(
-            value = settings.javaPath ?: auto,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(Res.string.settings_java)) },
-            leadingIcon = { Icon(painterResource(Res.drawable.ic_coffee), null) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+    JavaChoice(runtimes.orEmpty(), settings.javaPath, stringResource(Res.string.settings_java_auto)) { path ->
+        update { it.copy(javaPath = path) }
+    }
+}
+
+/** Garbage collector and how the game process starts. */
+@Composable
+private fun AdvancedSection(settings: Settings, update: Update) {
+    SectionCard(stringResource(Res.string.settings_advanced), icon = painterResource(Res.drawable.ic_science)) {
+        GcChoice(settings.gc, inherited = null) { gc -> update { it.copy(gc = gc ?: GarbageCollector.AUTO) } }
+        ProcessFields(
+            wrapper = settings.wrapperCommand,
+            preLaunch = settings.preLaunchCommand,
+            env = settings.envVars,
+            onWrapper = { v -> update { it.copy(wrapperCommand = v) } },
+            onPreLaunch = { v -> update { it.copy(preLaunchCommand = v) } },
+            onEnv = { v -> update { it.copy(envVars = v) } },
         )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(auto) },
-                onClick = {
-                    update { it.copy(javaPath = null) }
-                    open = false
-                },
-            )
-            runtimes.orEmpty().forEach { java ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            if (java.managed) "Java ${java.major} · ${java.arch} · $managedLabel"
-                            else "Java ${java.major} · ${java.arch} · ${java.path}"
-                        )
-                    },
-                    onClick = {
-                        update { it.copy(javaPath = java.path) }
-                        open = false
-                    },
-                )
-            }
-        }
     }
 }
 
@@ -759,37 +806,4 @@ private fun sourceLabel(source: DownloadSource): StringResource = when (source) 
     DownloadSource.AUTO -> Res.string.settings_source_auto
     DownloadSource.OFFICIAL -> Res.string.settings_source_official
     DownloadSource.MIRROR -> Res.string.settings_source_mirror
-}
-
-@Composable
-private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            Hint(subtitle)
-        }
-        Spacer(Modifier.width(12.dp))
-        Switch(checked, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun NumberField(label: String, value: UInt, modifier: Modifier, onChange: (UInt) -> Unit) {
-    OutlinedTextField(
-        value = value.toString(),
-        onValueChange = { text -> text.filter(Char::isDigit).take(5).toUIntOrNull()?.let(onChange) },
-        label = { Text(label) },
-        singleLine = true,
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun Label(text: String) {
-    Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

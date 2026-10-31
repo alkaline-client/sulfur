@@ -267,7 +267,7 @@ private fun Page(
                     onNavigate(Destination.Download)
                 })
                 Destination.Download -> DownloadScreen(app.download, app.mods, app.modpacks, app.repository)
-                Destination.Settings -> SettingsScreen(app.repository, app.misc)
+                Destination.Settings -> SettingsScreen(app.repository, app.misc, app.themeColors)
                 Destination.Misc -> MiscScreen(app.misc, app.repository)
             }
         }

@@ -7,6 +7,7 @@ import dev.sulfur.ffi.ArchivedVersion
 import dev.sulfur.ffi.Banner
 import dev.sulfur.ffi.CoreException
 import dev.sulfur.ffi.CorePaths
+import dev.sulfur.ffi.DesktopWallpaper
 import dev.sulfur.ffi.ForeignConfig
 import dev.sulfur.ffi.GameSession
 import dev.sulfur.ffi.InstallRequest
@@ -25,11 +26,13 @@ import dev.sulfur.ffi.ModRef
 import dev.sulfur.ffi.ModSort
 import dev.sulfur.ffi.ModpackInfo
 import dev.sulfur.ffi.ModpackVersion
+import dev.sulfur.ffi.NewsEntry
 import dev.sulfur.ffi.ProjectKind
 import dev.sulfur.ffi.Settings
 import dev.sulfur.ffi.SignInTask
 import dev.sulfur.ffi.SulfurCore
 import dev.sulfur.ffi.VersionList
+import dev.sulfur.ffi.VersionSettings
 import dev.sulfur.resources.Res
 import dev.sulfur.resources.msg_error
 import dev.sulfur.resources.msg_install_failed
@@ -140,6 +143,24 @@ class SulfurRepository(
             refreshInstalled()
         }
     }
+
+    /** One version's overrides of the game and Java settings. */
+    fun versionSettings(versionId: String): VersionSettings = core.versionSettings(versionId)
+
+    fun setVersionSettings(versionId: String, overrides: VersionSettings) {
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { core.setVersionSettings(versionId, overrides) } }
+                .onFailure(::notifyError)
+        }
+    }
+
+    /** The desktop's wallpaper (a picture the UI can decode, or a color), or null if unknown. */
+    suspend fun desktopWallpaper(): DesktopWallpaper? = withContext(Dispatchers.IO) { core.desktopWallpaper() }
+
+    suspend fun launcherNews(refresh: Boolean): List<NewsEntry> = core.launcherNews(refresh)
+
+    /** A Markdown document from a file or an https address, for the Launch page. */
+    suspend fun readDocument(location: String): String = core.readDocument(location)
 
     suspend fun versionList(refresh: Boolean): VersionList = core.versionList(refresh)
 
@@ -260,9 +281,13 @@ class SulfurRepository(
 
     @OptIn(FlowPreview::class)
     private suspend fun persistSettings() {
+        var saved = _settings.value
         settings.drop(1).debounce(400).collect { value ->
+            // Reading every installed version is only needed when where they live changed.
+            val moved = value.gameDir != saved.gameDir || value.isolation != saved.isolation
+            saved = value
             runCatching { withContext(Dispatchers.IO) { core.updateSettings(value) } }
-                .onSuccess { refreshInstalled() }
+                .onSuccess { if (moved) refreshInstalled() }
                 .onFailure(::notifyError)
         }
     }
@@ -287,7 +312,8 @@ class SulfurRepository(
                     finished.remove(s.versionId)
                 }
             }
-            delay(if (snapshots.isEmpty()) 500 else 100)
+            // Finished installs stay listed until dismissed; they need no fast polling.
+            delay(if (snapshots.any { it.isRunning }) 100 else 500)
         }
     }
 }

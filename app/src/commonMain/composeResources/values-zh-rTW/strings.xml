@@ -321,4 +321,65 @@
         <item>失傳版本由 Omniarchive 保存</item>
         <item>Rust 核心透過 UniFFI（Mozilla）與 Kotlin 繫結</item>
     </string-array>
+    <string name="settings_advanced">進階</string>
+    <string name="settings_gc">垃圾回收器</string>
+    <string name="gc_auto">JVM 預設</string>
+    <string name="gc_auto_hint">由 Java 自行選擇（目前版本為 G1）。</string>
+    <string name="gc_g1_hint">按官方啟動器的方式調校的 G1：停頓短，適合大多數情況。</string>
+    <string name="gc_zgc_hint">分代 ZGC：幾乎無停頓，適合記憶體充足的大型模組包。需要 Java 17 或更新版本。</string>
+    <string name="gc_shenandoah_hint">停頓短且額外記憶體占用少。需要 Java 12 或更新版本的 OpenJDK 建置；其他 Java 將使用預設回收器。</string>
+    <string name="gc_parallel_hint">吞吐量最高，但停頓較長，可能出現卡頓。</string>
+    <string name="settings_game_args">額外遊戲參數</string>
+    <string name="settings_min_memory">初始記憶體（MiB）</string>
+    <string name="settings_min_memory_hint">留空則由 Java 決定。</string>
+    <string name="settings_wrapper">包裝命令</string>
+    <string name="settings_wrapper_hint">遊戲將透過此程式執行，例如 gamemoderun、prime-run 或 mangohud。</string>
+    <string name="settings_pre_launch">啟動前命令</string>
+    <string name="settings_pre_launch_hint">在遊戲啟動前於遊戲資料夾中執行，啟動會等待其完成。可使用 INST_DIR、INST_NAME 和 INST_JAVA 變數。</string>
+    <string name="settings_env">環境變數</string>
+    <string name="settings_env_hint">每行一個 名稱=值。</string>
+    <string name="version_tab_general">一般</string>
+    <string name="version_tab_java">Java 與記憶體</string>
+    <string name="version_tab_advanced">進階</string>
+    <string name="version_follow_global">與全域設定相同</string>
+    <string name="version_window">遊戲視窗</string>
+    <string name="version_windowed">視窗</string>
+    <string name="version_server">啟動後加入伺服器</string>
+    <string name="version_server_hint">位址，可附帶連接埠，例如 play.example.com:25565。</string>
+    <string name="version_memory_custom">單獨設定記憶體</string>
+    <string name="version_memory_custom_hint">否則使用「設定 → 遊戲」中的記憶體。</string>
+    <string name="version_reset">恢復為全域設定</string>
+    <string name="version_on">開啟</string>
+    <string name="version_off">關閉</string>
+    <string name="settings_color_source_seed">所選顏色</string>
+    <string name="settings_color_source_wallpaper">桌布</string>
+    <string name="settings_color_wallpaper_hint">顏色取自桌面桌布，並會隨桌布變化。</string>
+    <string name="settings_color_wallpaper_none">未找到桌布，將使用所選顏色。</string>
+    <string name="settings_color_background_hint">顏色取自背景圖片。</string>
+    <string name="settings_color_background_none">尚未設定背景圖片，將使用所選顏色。</string>
+    <string name="settings_background_use_wallpaper">使用桌布</string>
+    <string name="launch_customize">自訂頁面</string>
+    <string name="launch_customize_done">完成</string>
+    <string name="launch_add_card">新增卡片</string>
+    <string name="launch_column">啟動欄位置</string>
+    <string name="launch_column_left">左側</string>
+    <string name="launch_column_right">右側</string>
+    <string name="launch_cards_hint">可新增新聞、便條、連結或自己的 Markdown 頁面卡片。</string>
+    <string name="widget_news">Minecraft 新聞</string>
+    <string name="widget_versions">最新版本</string>
+    <string name="widget_note">便條</string>
+    <string name="widget_links">連結</string>
+    <string name="widget_markdown">Markdown 頁面</string>
+    <string name="widget_move_up">上移</string>
+    <string name="widget_move_down">下移</string>
+    <string name="widget_edit">編輯卡片</string>
+    <string name="widget_remove">移除卡片</string>
+    <string name="widget_title">標題</string>
+    <string name="widget_title_hint">留空則使用卡片類型作為標題。</string>
+    <string name="widget_text">內容</string>
+    <string name="widget_links_text">連結，每行一個：名稱 | https://…</string>
+    <string name="widget_markdown_source">檔案或 https:// 位址</string>
+    <string name="widget_load_error">無法載入：%1$s</string>
+    <string name="widget_read_more">閱讀全文</string>
+    <string name="widget_empty">這裡還沒有內容。</string>
 </resources>

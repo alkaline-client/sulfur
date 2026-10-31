@@ -353,4 +353,65 @@
         <item>Lost versions preserved by Omniarchive</item>
         <item>Rust core bound to Kotlin with UniFFI (Mozilla)</item>
     </string-array>
+    <string name="settings_advanced">Advanced</string>
+    <string name="settings_gc">Garbage collector</string>
+    <string name="gc_auto">JVM default</string>
+    <string name="gc_auto_hint">Leaves the choice to Java (G1 on current versions).</string>
+    <string name="gc_g1_hint">G1 tuned like the official launcher: short pauses, a good fit for most games.</string>
+    <string name="gc_zgc_hint">Generational ZGC: almost no pauses, for large modpacks with plenty of memory. Needs Java 17 or newer.</string>
+    <string name="gc_shenandoah_hint">Short pauses with little extra memory. Needs an OpenJDK build of Java 12 or newer; other Java builds use their default.</string>
+    <string name="gc_parallel_hint">Highest throughput but longer pauses, which can show as stutter.</string>
+    <string name="settings_game_args">Extra game arguments</string>
+    <string name="settings_min_memory">Initial memory (MiB)</string>
+    <string name="settings_min_memory_hint">Empty leaves it to Java.</string>
+    <string name="settings_wrapper">Wrapper command</string>
+    <string name="settings_wrapper_hint">The game runs through this program, e.g. gamemoderun, prime-run or mangohud.</string>
+    <string name="settings_pre_launch">Pre-launch command</string>
+    <string name="settings_pre_launch_hint">Runs in the game folder before the game starts, and launching waits for it. INST_DIR, INST_NAME and INST_JAVA are set.</string>
+    <string name="settings_env">Environment variables</string>
+    <string name="settings_env_hint">One NAME=value per line.</string>
+    <string name="version_tab_general">General</string>
+    <string name="version_tab_java">Java and memory</string>
+    <string name="version_tab_advanced">Advanced</string>
+    <string name="version_follow_global">Same as global settings</string>
+    <string name="version_window">Game window</string>
+    <string name="version_windowed">Windowed</string>
+    <string name="version_server">Join a server on start</string>
+    <string name="version_server_hint">Address with an optional port, e.g. play.example.com:25565.</string>
+    <string name="version_memory_custom">Own memory limit</string>
+    <string name="version_memory_custom_hint">Otherwise the memory set in Settings → Game is used.</string>
+    <string name="version_reset">Reset to global settings</string>
+    <string name="version_on">On</string>
+    <string name="version_off">Off</string>
+    <string name="settings_color_source_seed">Chosen color</string>
+    <string name="settings_color_source_wallpaper">Wallpaper</string>
+    <string name="settings_color_wallpaper_hint">Colors come from your desktop wallpaper and follow it when it changes.</string>
+    <string name="settings_color_wallpaper_none">No wallpaper found, so the chosen color is used.</string>
+    <string name="settings_color_background_hint">Colors come from the background picture.</string>
+    <string name="settings_color_background_none">No background picture yet, so the chosen color is used.</string>
+    <string name="settings_background_use_wallpaper">Use wallpaper</string>
+    <string name="launch_customize">Customize page</string>
+    <string name="launch_customize_done">Done</string>
+    <string name="launch_add_card">Add card</string>
+    <string name="launch_column">Play column</string>
+    <string name="launch_column_left">Left</string>
+    <string name="launch_column_right">Right</string>
+    <string name="launch_cards_hint">Add cards with news, notes, links or a Markdown page of your own.</string>
+    <string name="widget_news">Minecraft news</string>
+    <string name="widget_versions">Latest versions</string>
+    <string name="widget_note">Note</string>
+    <string name="widget_links">Links</string>
+    <string name="widget_markdown">Markdown page</string>
+    <string name="widget_move_up">Move up</string>
+    <string name="widget_move_down">Move down</string>
+    <string name="widget_edit">Edit card</string>
+    <string name="widget_remove">Remove card</string>
+    <string name="widget_title">Title</string>
+    <string name="widget_title_hint">Empty uses the card type as the title.</string>
+    <string name="widget_text">Text</string>
+    <string name="widget_links_text">Links, one per line: label | https://…</string>
+    <string name="widget_markdown_source">File or https:// address</string>
+    <string name="widget_load_error">Could not load: %1$s</string>
+    <string name="widget_read_more">Read more</string>
+    <string name="widget_empty">Nothing here yet.</string>
 </resources>

@@ -7,6 +7,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.security.MessageDigest
 import java.time.Duration
+import java.util.Properties
 import java.util.zip.Inflater
 
 plugins {
@@ -48,7 +49,7 @@ val cargoOutDir = repoRoot.resolve(
 val nativeLib = cargoOutDir.resolve(nativeLibName)
 
 // Per-checkout build settings in the untracked local.properties (key=value).
-val localProperties = java.util.Properties().apply {
+val localProperties = Properties().apply {
     repoRoot.resolve("local.properties").takeIf { it.isFile }?.reader()?.use { load(it) }
 }
 

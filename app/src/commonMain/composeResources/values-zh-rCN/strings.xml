@@ -321,4 +321,65 @@
         <item>失传版本由 Omniarchive 保存</item>
         <item>Rust 核心通过 UniFFI（Mozilla）与 Kotlin 绑定</item>
     </string-array>
+    <string name="settings_advanced">高级</string>
+    <string name="settings_gc">垃圾回收器</string>
+    <string name="gc_auto">JVM 默认</string>
+    <string name="gc_auto_hint">由 Java 自行选择（当前版本为 G1）。</string>
+    <string name="gc_g1_hint">按官方启动器的方式调优的 G1：停顿短，适合大多数情况。</string>
+    <string name="gc_zgc_hint">分代 ZGC：几乎无停顿，适合内存充足的大型整合包。需要 Java 17 或更高版本。</string>
+    <string name="gc_shenandoah_hint">停顿短且额外内存占用少。需要 Java 12 或更高版本的 OpenJDK 构建；其他 Java 将使用默认回收器。</string>
+    <string name="gc_parallel_hint">吞吐量最高，但停顿较长，可能出现卡顿。</string>
+    <string name="settings_game_args">额外游戏参数</string>
+    <string name="settings_min_memory">初始内存（MiB）</string>
+    <string name="settings_min_memory_hint">留空则由 Java 决定。</string>
+    <string name="settings_wrapper">包装命令</string>
+    <string name="settings_wrapper_hint">游戏将通过此程序运行，例如 gamemoderun、prime-run 或 mangohud。</string>
+    <string name="settings_pre_launch">启动前命令</string>
+    <string name="settings_pre_launch_hint">在游戏启动前于游戏文件夹中运行，启动会等待其完成。可使用 INST_DIR、INST_NAME 和 INST_JAVA 变量。</string>
+    <string name="settings_env">环境变量</string>
+    <string name="settings_env_hint">每行一个 名称=值。</string>
+    <string name="version_tab_general">常规</string>
+    <string name="version_tab_java">Java 与内存</string>
+    <string name="version_tab_advanced">高级</string>
+    <string name="version_follow_global">与全局设置相同</string>
+    <string name="version_window">游戏窗口</string>
+    <string name="version_windowed">窗口</string>
+    <string name="version_server">启动后加入服务器</string>
+    <string name="version_server_hint">地址，可附带端口，例如 play.example.com:25565。</string>
+    <string name="version_memory_custom">单独设置内存</string>
+    <string name="version_memory_custom_hint">否则使用“设置 → 游戏”中的内存。</string>
+    <string name="version_reset">恢复为全局设置</string>
+    <string name="version_on">开启</string>
+    <string name="version_off">关闭</string>
+    <string name="settings_color_source_seed">所选颜色</string>
+    <string name="settings_color_source_wallpaper">壁纸</string>
+    <string name="settings_color_wallpaper_hint">颜色取自桌面壁纸，并会随壁纸变化。</string>
+    <string name="settings_color_wallpaper_none">未找到壁纸，将使用所选颜色。</string>
+    <string name="settings_color_background_hint">颜色取自背景图片。</string>
+    <string name="settings_color_background_none">尚未设置背景图片，将使用所选颜色。</string>
+    <string name="settings_background_use_wallpaper">使用壁纸</string>
+    <string name="launch_customize">自定义页面</string>
+    <string name="launch_customize_done">完成</string>
+    <string name="launch_add_card">添加卡片</string>
+    <string name="launch_column">启动栏位置</string>
+    <string name="launch_column_left">左侧</string>
+    <string name="launch_column_right">右侧</string>
+    <string name="launch_cards_hint">可添加新闻、便签、链接或自己的 Markdown 页面卡片。</string>
+    <string name="widget_news">Minecraft 新闻</string>
+    <string name="widget_versions">最新版本</string>
+    <string name="widget_note">便签</string>
+    <string name="widget_links">链接</string>
+    <string name="widget_markdown">Markdown 页面</string>
+    <string name="widget_move_up">上移</string>
+    <string name="widget_move_down">下移</string>
+    <string name="widget_edit">编辑卡片</string>
+    <string name="widget_remove">移除卡片</string>
+    <string name="widget_title">标题</string>
+    <string name="widget_title_hint">留空则使用卡片类型作为标题。</string>
+    <string name="widget_text">内容</string>
+    <string name="widget_links_text">链接，每行一个：名称 | https://…</string>
+    <string name="widget_markdown_source">文件或 https:// 地址</string>
+    <string name="widget_load_error">无法加载：%1$s</string>
+    <string name="widget_read_more">阅读全文</string>
+    <string name="widget_empty">这里还没有内容。</string>
 </resources>
