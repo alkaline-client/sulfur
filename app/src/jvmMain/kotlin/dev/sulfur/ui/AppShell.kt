@@ -1,5 +1,7 @@
 package dev.sulfur.ui
 
+import dev.sulfur.feature.download.DownloadSection
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.SizeTransform
@@ -43,12 +45,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -79,6 +86,7 @@ import dev.sulfur.resources.ic_settings
 import dev.sulfur.resources.ic_settings_filled
 import dev.sulfur.resources.ic_widgets
 import dev.sulfur.resources.ic_widgets_filled
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.StringResource
@@ -124,6 +132,7 @@ fun AppShell(app: AppContainer) {
             }
             // Over a picture the page turns slightly translucent so the picture shows at its edges.
             val pageColor = MaterialTheme.colorScheme.surface.let { if (background != null) it.copy(alpha = 0.86f) else it }
+            WarmUpPages(app, destination)
             val page: @Composable (Modifier) -> Unit = { modifier ->
                 Page(app, destination, pageColor, onNavigate = { destination = it }, modifier = modifier)
             }
@@ -161,31 +170,32 @@ private fun Brand(showName: Boolean) {
 @Composable
 private fun TopBar(destination: Destination, running: Int, onSelect: (Destination) -> Unit) {
     val chrome = LocalWindowChrome.current
-    Row(
-        Modifier.fillMaxWidth().height(72.dp).windowTitleBar(chrome)
-            .padding(start = if (chrome?.nativeButtons == true) TrafficLightsWidth else 20.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Brand(showName = true)
-        // The bar's own items, centered between the brand and the window buttons. The
-        // ShortNavigationBar container is meant for the full window width.
+    WindowTitleBar(Modifier.fillMaxWidth().height(72.dp)) {
         Row(
-            Modifier.weight(1f).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            Modifier.fillMaxSize().padding(start = if (chrome?.nativeButtons == true) TrafficLightsWidth else 20.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Destination.entries.forEach { item ->
-                val selected = item == destination
-                ShortNavigationBarItem(
-                    selected = selected,
-                    onClick = { onSelect(item) },
-                    icon = { DestinationIcon(item, selected, running) },
-                    label = { Text(stringResource(item.label)) },
-                    iconPosition = NavigationItemIconPosition.Start,
-                )
+            Brand(showName = true)
+            // The bar's own items, centered between the brand and the window buttons. The
+            // ShortNavigationBar container is meant for the full window width.
+            Row(
+                Modifier.weight(1f).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Destination.entries.forEach { item ->
+                    val selected = item == destination
+                    ShortNavigationBarItem(
+                        selected = selected,
+                        onClick = { onSelect(item) },
+                        icon = { DestinationIcon(item, selected, running) },
+                        label = { Text(stringResource(item.label)) },
+                        iconPosition = NavigationItemIconPosition.Start,
+                    )
+                }
             }
+            WindowButtons()
         }
-        WindowButtons()
     }
 }
 
@@ -202,13 +212,15 @@ private fun SideRail(destination: Destination, running: Int, onSelect: (Destinat
             val chrome = LocalWindowChrome.current
             // On macOS the traffic lights sit above the brand.
             val top = if (chrome?.nativeButtons == true) TrafficLightsHeight else 0.dp
-            Column(Modifier.windowTitleBar(chrome).padding(start = 20.dp, top = top)) {
-                Box(Modifier.padding(start = 8.dp, bottom = 8.dp)) { Brand(showName = expanded) }
-                IconButton(onClick = { scope.launch { railState.toggle() } }) {
-                    Icon(
-                        painterResource(if (expanded) Res.drawable.ic_menu_open else Res.drawable.ic_menu),
-                        contentDescription = stringResource(if (expanded) Res.string.nav_collapse else Res.string.nav_expand),
-                    )
+            WindowTitleBar {
+                Column(Modifier.padding(start = 20.dp, top = top)) {
+                    Box(Modifier.padding(start = 8.dp, bottom = 8.dp)) { Brand(showName = expanded) }
+                    IconButton(onClick = { scope.launch { railState.toggle() } }) {
+                        Icon(
+                            painterResource(if (expanded) Res.drawable.ic_menu_open else Res.drawable.ic_menu),
+                            contentDescription = stringResource(if (expanded) Res.string.nav_collapse else Res.string.nav_expand),
+                        )
+                    }
                 }
             }
         },
@@ -244,7 +256,9 @@ private fun Page(
     onNavigate: (Destination) -> Unit,
     modifier: Modifier,
 ) {
-    Surface(modifier = modifier, shape = MaterialTheme.shapes.extraLarge, color = color) {
+    // The content color is given: over a background picture the page color is translucent,
+    // which contentColorFor does not recognize, and text would fall back to black.
+    Surface(modifier = modifier, shape = MaterialTheme.shapes.extraLarge, color = color, contentColor = MaterialTheme.colorScheme.onSurface) {
         val motion = MaterialTheme.motionScheme
         AnimatedContent(
             targetState = destination,
@@ -262,14 +276,61 @@ private fun Page(
             },
             label = "page",
         ) { page ->
-            when (page) {
-                Destination.Launch -> LaunchScreen(app.launch, app.repository, app.misc, onBrowseVersions = {
-                    onNavigate(Destination.Download)
-                })
-                Destination.Download -> DownloadScreen(app.download, app.mods, app.modpacks, app.repository)
-                Destination.Settings -> SettingsScreen(app.repository, app.misc, app.themeColors)
-                Destination.Misc -> MiscScreen(app.misc, app.repository)
-            }
+            PageContent(app, page, onNavigate)
         }
+    }
+}
+
+@Composable
+private fun PageContent(app: AppContainer, page: Destination, onNavigate: (Destination) -> Unit) {
+    when (page) {
+        Destination.Launch -> LaunchScreen(
+            app.launch,
+            app.repository,
+            app.misc,
+            onBrowseVersions = { onNavigate(Destination.Download) },
+            onBrowseMods = { versionId, kind ->
+                app.mods.selectVersion(versionId)
+                app.mods.setKind(kind)
+                app.download.showSection(DownloadSection.Mods)
+                onNavigate(Destination.Download)
+            },
+        )
+        Destination.Download -> DownloadScreen(app.download, app.mods, app.modpacks, app.repository)
+        Destination.Settings -> SettingsScreen(app.repository, app.misc, app.themeColors)
+        Destination.Misc -> MiscScreen(app.misc, app.repository)
+    }
+}
+
+/**
+ * Composes every other page once, unseen, shortly after start. A page's first
+ * composition is far slower than later ones (class loading, the JIT, string
+ * and icon resources, first image decodes), which made the first visit to
+ * each page stutter. The page is laid out below the window, where it is
+ * neither drawn nor reachable by the pointer, for a few frames each.
+ */
+@Composable
+private fun WarmUpPages(app: AppContainer, shown: Destination) {
+    var pending by remember { mutableStateOf<List<Destination>?>(null) }
+    LaunchedEffect(Unit) {
+        // After the first page has settled.
+        delay(800)
+        pending = Destination.entries - shown
+    }
+    val page = pending?.firstOrNull() ?: return
+    LaunchedEffect(page) {
+        repeat(3) { withFrameNanos {} }
+        pending = pending?.drop(1)
+    }
+    Box(
+        Modifier.fillMaxSize()
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, placeable.height) { placeable.place(0, constraints.maxHeight * 2) }
+            }
+            .alpha(0f)
+            .clearAndSetSemantics {}
+    ) {
+        PageContent(app, page, onNavigate = {})
     }
 }

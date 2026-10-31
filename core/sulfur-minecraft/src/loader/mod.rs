@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use sulfur_download::{CancellationToken, Downloader};
+use sulfur_download::{CancellationToken, DownloadError, Downloader};
 
 use crate::{
     McError, Result,
@@ -66,14 +66,15 @@ pub struct LoaderRequest {
     pub installer_url: Option<String>,
 }
 
-/// Versions of `kind` available for `game_version`, newest first.
+/// Versions of `kind` available for `game_version`, newest first; empty
+/// when the loader does not support that game version.
 pub async fn versions(
     downloader: &Downloader,
     kind: LoaderKind,
     game_version: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<LoaderVersion>> {
-    match kind {
+    let found = match kind {
         LoaderKind::Fabric | LoaderKind::LegacyFabric | LoaderKind::Ornithe | LoaderKind::Quilt => {
             fabric::versions(downloader, kind, game_version, cancel).await
         }
@@ -82,6 +83,12 @@ pub async fn versions(
         LoaderKind::Cleanroom => forge::cleanroom_versions(downloader, game_version, cancel).await,
         LoaderKind::OptiFine => optifine::versions(downloader, game_version, cancel).await,
         LoaderKind::Rift => rift::versions(downloader, game_version, cancel).await,
+    };
+    match found {
+        // Fabric's, Quilt's and Legacy Fabric's meta servers answer 400 or 404
+        // for game versions they do not know.
+        Err(McError::Download(DownloadError::Status { status: 400 | 404, .. })) => Ok(Vec::new()),
+        other => other,
     }
 }
 

@@ -1,5 +1,8 @@
 package dev.sulfur.feature.mods
 
+import dev.sulfur.resources.ic_arrow_drop_down
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
@@ -27,10 +30,8 @@ import dev.sulfur.resources.ic_close
 import dev.sulfur.resources.list_add_tip
 import dev.sulfur.resources.list_add_tip_mac
 import dev.sulfur.resources.list_clear
-import dev.sulfur.resources.list_hint
 import dev.sulfur.resources.list_in
 import dev.sulfur.resources.list_install_all
-import dev.sulfur.resources.list_title
 import dev.sulfur.resources.n_listed
 import dev.sulfur.ui.IsMac
 import org.jetbrains.compose.resources.pluralStringResource
@@ -51,7 +52,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -116,7 +116,6 @@ import dev.sulfur.resources.ic_delete
 import dev.sulfur.resources.ic_download
 import dev.sulfur.resources.ic_extension
 import dev.sulfur.resources.ic_open_in_new
-import dev.sulfur.resources.ic_search
 import dev.sulfur.resources.ic_sort
 import dev.sulfur.resources.mods_by
 import dev.sulfur.resources.mods_downloads
@@ -134,11 +133,17 @@ import dev.sulfur.resources.no_results
 import dev.sulfur.ui.components.CardSpacing
 import dev.sulfur.ui.components.ConnectedChoice
 import dev.sulfur.ui.components.RemoteImage
+import dev.sulfur.ui.components.SearchToolbar
+import dev.sulfur.ui.components.Notice
 import dev.sulfur.ui.components.SectionCard
 import dev.sulfur.ui.components.ShapeIcon
 import dev.sulfur.ui.components.formatBytes
 import dev.sulfur.ui.components.formatCount
+import dev.sulfur.ui.components.Logo
+import dev.sulfur.ui.components.loaderLogo
 import dev.sulfur.ui.components.loaderName
+import dev.sulfur.ui.components.versionLabel
+import dev.sulfur.ui.components.minecraftLogo
 import dev.sulfur.util.openUrl
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -161,6 +166,22 @@ fun ModsPane(viewModel: ModsViewModel, repository: SulfurRepository, modifier: M
     }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(CardSpacing)) {
+        SearchToolbar(ui.query, viewModel::setQuery, stringResource(searchHint(ui.kind))) {
+            ConnectedChoice(
+                options = SourceChoice.entries,
+                selected = ui.source,
+                label = {
+                    when (it) {
+                        SourceChoice.Both -> stringResource(Res.string.mods_source_both)
+                        SourceChoice.Modrinth -> "Modrinth"
+                        SourceChoice.CurseForge -> "CurseForge"
+                    }
+                },
+                onSelect = viewModel::setSource,
+                fill = false,
+            )
+            SortMenu(ui.sort, viewModel::setSort)
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -178,31 +199,6 @@ fun ModsPane(viewModel: ModsViewModel, repository: SulfurRepository, modifier: M
                 fill = false,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(
-                value = ui.query,
-                onValueChange = viewModel::setQuery,
-                placeholder = { Text(stringResource(searchHint(ui.kind)), maxLines = 1) },
-                leadingIcon = { Icon(painterResource(Res.drawable.ic_search), null) },
-                singleLine = true,
-                shape = CircleShape,
-                modifier = Modifier.weight(1f),
-            )
-            ConnectedChoice(
-                options = SourceChoice.entries,
-                selected = ui.source,
-                label = {
-                    when (it) {
-                        SourceChoice.Both -> stringResource(Res.string.mods_source_both)
-                        SourceChoice.Modrinth -> "Modrinth"
-                        SourceChoice.CurseForge -> "CurseForge"
-                    }
-                },
-                onSelect = viewModel::setSource,
-                fill = false,
-            )
-            SortMenu(ui.sort, viewModel::setSort)
-        }
         val notice = when {
             version == null -> Res.string.mods_no_version
             ui.kind == ProjectKind.MOD && !hasModLoader -> Res.string.mods_no_loader
@@ -211,20 +207,15 @@ fun ModsPane(viewModel: ModsViewModel, repository: SulfurRepository, modifier: M
             else -> null
         }
         if (notice != null) {
-            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.tertiaryContainer) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(Res.drawable.ic_extension), null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        stringResource(notice),
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
+            Notice(
+                painterResource(Res.drawable.ic_extension),
+                stringResource(notice),
+                container = MaterialTheme.colorScheme.tertiaryContainer,
+                content = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-            val wide = maxWidth >= 840.dp
+            val wide = maxWidth >= 1000.dp
             Row(horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                 Results(ui, canInstall, viewModel, Modifier.weight(1.7f).fillMaxHeight())
                 if (wide && version != null) {
@@ -237,50 +228,62 @@ fun ModsPane(viewModel: ModsViewModel, repository: SulfurRepository, modifier: M
 
 @Composable
 private fun VersionPicker(installed: List<InstalledVersion>, current: InstalledVersion?, onSelect: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }, modifier = Modifier.widthIn(min = 200.dp, max = 280.dp)) {
-        OutlinedTextField(
-            value = current?.let { describe(it) }.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            label = { Text(stringResource(Res.string.mods_version)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
-            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            installed.forEach { v ->
-                DropdownMenuItem(
-                    text = { Text(describe(v)) },
-                    onClick = {
-                        onSelect(v.id)
-                        open = false
-                    },
-                )
-            }
-        }
-    }
+    CompactPicker(
+        current = current,
+        options = installed,
+        text = ::describe,
+        placeholder = stringResource(Res.string.mods_version),
+        icon = { Logo(versionLogo(it), 20.dp) },
+        onSelect = { onSelect(it.id) },
+    )
 }
 
 @Composable
 private fun WorldPicker(worlds: List<String>, current: String?, onSelect: (String) -> Unit) {
+    CompactPicker(
+        current = current,
+        options = worlds,
+        text = { it },
+        placeholder = stringResource(Res.string.mods_world),
+        onSelect = onSelect,
+    )
+}
+
+/** A menu behind a button as tall as the chips beside it, instead of a text field. */
+@Composable
+private fun <T> CompactPicker(
+    current: T?,
+    options: List<T>,
+    text: (T) -> String,
+    placeholder: String,
+    onSelect: (T) -> Unit,
+    icon: (@Composable (T) -> Unit)? = null,
+) {
     var open by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }, modifier = Modifier.widthIn(min = 160.dp, max = 240.dp)) {
-        OutlinedTextField(
-            value = current.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            label = { Text(stringResource(Res.string.mods_world)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
-            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            worlds.forEach { world ->
+    Box {
+        OutlinedButton(
+            onClick = { open = true },
+            shapes = ButtonDefaults.shapes(),
+            contentPadding = PaddingValues(start = 12.dp, end = 8.dp),
+            modifier = Modifier.widthIn(max = 300.dp),
+        ) {
+            if (current != null && icon != null) {
+                icon(current)
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(current?.let(text) ?: placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Icon(painterResource(Res.drawable.ic_arrow_drop_down), placeholder)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(world) },
+                    text = { Text(text(option)) },
+                    leadingIcon = icon?.let { { it(option) } },
+                    trailingIcon = if (option == current) {
+                        { Icon(painterResource(Res.drawable.ic_check), null) }
+                    } else null,
                     onClick = {
-                        onSelect(world)
+                        onSelect(option)
                         open = false
                     },
                 )
@@ -312,8 +315,9 @@ private fun folderTitle(kind: ProjectKind): StringResource = when (kind) {
 
 private fun sourceName(source: ModSource): String = if (source == ModSource.MODRINTH) "Modrinth" else "CurseForge"
 
-private fun describe(v: InstalledVersion): String =
-    v.loader?.let { "${v.id} · ${loaderName(it)}" } ?: v.id
+private fun versionLogo(v: InstalledVersion) = v.loader?.let(::loaderLogo) ?: minecraftLogo()
+
+private fun describe(v: InstalledVersion): String = versionLabel(v)
 
 @Composable
 internal fun SortMenu(sort: ModSort, onSort: (ModSort) -> Unit) {
@@ -346,13 +350,6 @@ private fun Results(ui: ModsUiState, canInstall: Boolean, viewModel: ModsViewMod
     // Data packs go into one world at a time, so they have no download list.
     val listable = ui.kind.listable && canInstall
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        AnimatedVisibility(
-            visible = ui.picking,
-            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-            exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
-        ) {
-            DownloadListBar(ui, canInstall = ui.versionId != null, viewModel)
-        }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
             ui.error?.let { error ->
                 item(key = "error") {
@@ -388,49 +385,63 @@ private fun Results(ui: ModsUiState, canInstall: Boolean, viewModel: ModsViewMod
                 }
             }
         }
+        // Docked under the results, so picking does not push them down.
+        AnimatedVisibility(
+            visible = ui.picking,
+            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+        ) {
+            DownloadListBar(ui, canInstall = ui.versionId != null, viewModel)
+        }
     }
 }
 
-/** The projects picked with Ctrl-click, installed together into the selected version. */
+/**
+ * The projects picked with Ctrl-click, installed together into the selected
+ * version: one line, with the picks scrolling sideways between its title and
+ * its buttons. The rows' check boxes show how to pick more.
+ */
 @Composable
 private fun DownloadListBar(ui: ModsUiState, canInstall: Boolean, viewModel: ModsViewModel) {
     val busy = ui.downloadList.any { it.hit.key in ui.installing }
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(Res.string.list_title) + " · " + pluralStringResource(Res.plurals.n_listed, ui.downloadList.size, ui.downloadList.size),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = viewModel::clearList, enabled = !busy) { Text(stringResource(Res.string.list_clear)) }
-                if (busy) {
-                    LoadingIndicator(Modifier.size(40.dp))
-                } else {
-                    Button(onClick = viewModel::installList, enabled = canInstall, shapes = ButtonDefaults.shapes()) {
-                        Icon(painterResource(Res.drawable.ic_download), null, Modifier.size(ButtonDefaults.IconSize))
-                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                        Text(stringResource(Res.string.list_install_all))
-                    }
-                }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                ui.downloadList.forEach { entry ->
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                pluralStringResource(Res.plurals.n_listed, ui.downloadList.size, ui.downloadList.size),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+            )
+            LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(ui.downloadList, key = { it.hit.key + it.kind }) { entry ->
                     InputChip(
                         selected = false,
                         onClick = { viewModel.removeListed(entry) },
                         enabled = entry.hit.key !in ui.installing,
-                        label = { Text("${entry.hit.title} · ${stringResource(kindTitle(entry.kind))}", maxLines = 1) },
+                        label = { Text(entry.hit.title, maxLines = 1) },
                         trailingIcon = { Icon(painterResource(Res.drawable.ic_close), stringResource(Res.string.action_remove), Modifier.size(16.dp)) },
                     )
                 }
             }
-            Text(
-                stringResource(Res.string.list_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
+            TextButton(onClick = viewModel::clearList, enabled = !busy) { Text(stringResource(Res.string.list_clear)) }
+            if (busy) {
+                LoadingIndicator(Modifier.size(40.dp))
+            } else {
+                Button(onClick = viewModel::installList, enabled = canInstall, shapes = ButtonDefaults.shapes()) {
+                    Icon(painterResource(Res.drawable.ic_download), null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text(stringResource(Res.string.list_install_all), maxLines = 1)
+                }
+            }
         }
     }
 }

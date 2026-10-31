@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,7 +39,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ButtonDefaults
@@ -48,9 +49,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
@@ -115,11 +114,8 @@ import dev.sulfur.resources.ic_cloud_off
 import dev.sulfur.resources.ic_deployed_code
 import dev.sulfur.resources.ic_download
 import dev.sulfur.resources.ic_extension
-import dev.sulfur.resources.ic_refresh
-import dev.sulfur.resources.ic_search
 import dev.sulfur.ffi.VersionKind
 import dev.sulfur.resources.ic_inventory_2
-import dev.sulfur.resources.archive_search
 import dev.sulfur.resources.download_section_modpacks
 import dev.sulfur.feature.modpacks.ModpacksViewModel
 import dev.sulfur.feature.modpacks.ModpacksPane
@@ -170,8 +166,12 @@ import dev.sulfur.ui.components.CardSpacing
 import dev.sulfur.ui.components.ConnectedChoice
 import dev.sulfur.ui.components.PageHeader
 import dev.sulfur.ui.components.PagePadding
+import dev.sulfur.ui.components.SearchToolbar
+import dev.sulfur.ui.components.RefreshButton
+import dev.sulfur.ui.components.Notice
 import dev.sulfur.ui.components.RemoteImage
-import dev.sulfur.ui.components.ShapeIcon
+import dev.sulfur.ui.components.Logo
+import dev.sulfur.ui.components.minecraftLogo
 import dev.sulfur.ui.components.formatBytes
 import dev.sulfur.ui.components.formatDate
 import dev.sulfur.ui.components.kindLabel
@@ -194,12 +194,30 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
     val installed by repository.installed.collectAsState()
     val state = remember(installed, installs) { InstallState(installed.map { it.id }.toSet(), installs.associateBy { it.versionId }) }
     val open = ui.openGroup
-    // Keeps the floating card's content while it animates away.
+    val target = ui.installTarget
+    val cardOpen = open != null || target != null
+    // Keep the floating cards' content while they animate away.
     var shownGroup by remember { mutableStateOf<VersionGroup?>(null) }
     ui.groups.firstOrNull { it.key == open }?.let { shownGroup = it }
+    var shownTarget by remember { mutableStateOf<String?>(null) }
+    if (target != null) shownTarget = target
+    val cleanroomDirect = repository.settings.collectAsState().value.cleanroomDirect
+    val page = @Composable { version: String, closes: Boolean ->
+        VersionInstallPage(
+            gameVersion = version,
+            listed = ui.versions.firstOrNull { it.id == version },
+            installedIds = state.installedIds,
+            cleanroomDirect = cleanroomDirect,
+            closes = closes,
+            initialLoader = ui.installLoader,
+            loadVersions = viewModel::loaderVersions,
+            onBack = { viewModel.showInstallOptions(null) },
+            onInstall = viewModel::install,
+        )
+    }
 
     // Read in the layer below, so the animation redraws the page instead of recomposing it.
-    val blur = animateDpAsState(if (open != null) 14.dp else 0.dp, MaterialTheme.motionScheme.defaultEffectsSpec())
+    val blur = animateDpAsState(if (cardOpen) 14.dp else 0.dp, MaterialTheme.motionScheme.defaultEffectsSpec())
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
@@ -236,42 +254,14 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
                             }
                         },
                     )
-                    if (ui.section == DownloadSection.Game || ui.section == DownloadSection.Archive) {
-                        val archive = ui.section == DownloadSection.Archive
-                        val query = if (archive) ui.archive.query else ui.query
-                        val setQuery: (String) -> Unit = if (archive) viewModel::setArchiveQuery else viewModel::setQuery
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = setQuery,
-                            placeholder = {
-                                Text(stringResource(if (archive) Res.string.archive_search else Res.string.download_search), maxLines = 1)
-                            },
-                            leadingIcon = { Icon(painterResource(Res.drawable.ic_search), null) },
-                            trailingIcon = if (query.isNotEmpty()) {
-                                { IconButton(onClick = { setQuery("") }) { Icon(painterResource(Res.drawable.ic_close), stringResource(Res.string.action_close)) } }
-                            } else null,
-                            singleLine = true,
-                            shape = CircleShape,
-                            modifier = Modifier.widthIn(min = 200.dp, max = 320.dp),
-                        )
-                    }
-                    if (ui.section == DownloadSection.Game) {
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                        if (ui.loading) {
-                            LoadingIndicator(Modifier.size(40.dp))
-                        } else {
-                            IconButton(onClick = { viewModel.refresh() }) {
-                                Icon(painterResource(Res.drawable.ic_refresh), stringResource(Res.string.action_refresh_versions))
-                            }
-                        }
-                    }
-                    }
                 }
 
                 installs.forEach { task ->
                     InstallStrip(task, onCancel = { viewModel.cancel(task.versionId) }, onDismiss = { viewModel.dismiss(task.versionId) })
                 }
 
+                // Every section below starts with the same toolbar (search, then its actions),
+                // then its filters and notices, then its results.
                 if (ui.section == DownloadSection.Mods) {
                     ModsPane(mods, repository, Modifier.fillMaxWidth().weight(1f))
                 } else if (ui.section == DownloadSection.Modpacks) {
@@ -279,6 +269,9 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
                 } else if (ui.section == DownloadSection.Archive) {
                     ArchivePane(ui.archive, state, viewModel, Modifier.fillMaxWidth().weight(1f))
                 } else {
+                SearchToolbar(ui.query, viewModel::setQuery, stringResource(Res.string.download_search)) {
+                    RefreshButton(ui.loading, stringResource(Res.string.action_refresh_versions), onClick = { viewModel.refresh() })
+                }
                 if (ui.error != null || ui.fromCache) {
                     OfflineBanner(ui.error, onRetry = { viewModel.refresh() })
                 }
@@ -342,12 +335,12 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
             }
 
             // Scrim: dims the blurred page and closes the card when clicked.
-            AnimatedVisibility(open != null, enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(cardOpen, enter = fadeIn(), exit = fadeOut()) {
                 Box(
                     Modifier.fillMaxSize()
                         .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            viewModel.openGroup(null)
+                            viewModel.closeCards()
                         }
                 )
             }
@@ -363,39 +356,60 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
                         banner = ui.banners[group.key],
                         state = state,
                         viewModel = viewModel,
+                        target = target,
+                        page = { page(it, false) },
                         animatedVisibilityScope = this,
                     )
                 }
             }
+            // A version opened from search results, outside any update's card.
+            AnimatedVisibility(
+                visible = open == null && target != null,
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + scaleIn(initialScale = 0.94f),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()) + scaleOut(targetScale = 0.94f),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                shownTarget?.let { version ->
+                    FloatingCard(onEscape = { viewModel.showInstallOptions(null) }) { page(version, true) }
+                }
+            }
         }
     }
+}
 
-    ui.installTarget?.let { target ->
-        InstallDialog(
-            gameVersion = target,
-            installed = target in state.installedIds,
-            cleanroomDirect = repository.settings.collectAsState().value.cleanroomDirect,
-            loadVersions = viewModel::loaderVersions,
-            onDismiss = { viewModel.showInstallOptions(null) },
-            onInstall = viewModel::install,
-        )
-    }
+/** A card above the blurred page, closed with Esc. */
+@Composable
+private fun FloatingCard(onEscape: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Surface(
+        modifier = modifier
+            .widthIn(max = 760.dp)
+            .fillMaxWidth(0.88f)
+            .fillMaxHeight(0.9f)
+            .focusRequester(focus)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.key == Key.Escape) {
+                    onEscape()
+                    true
+                } else false
+            },
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shadowElevation = 8.dp,
+    ) { content() }
 }
 
 @Composable
 private fun OfflineBanner(error: String?, onRetry: () -> Unit) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.errorContainer) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(Res.drawable.ic_cloud_off), null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                error ?: stringResource(Res.string.download_offline),
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onRetry) { Text(stringResource(Res.string.action_retry)) }
-        }
+    Notice(
+        painterResource(Res.drawable.ic_cloud_off),
+        error ?: stringResource(Res.string.download_offline),
+        container = MaterialTheme.colorScheme.errorContainer,
+        content = MaterialTheme.colorScheme.onErrorContainer,
+    ) {
+        TextButton(onClick = onRetry) { Text(stringResource(Res.string.action_retry)) }
     }
 }
 
@@ -470,7 +484,7 @@ private fun GroupCard(
     ) {
         Column {
             RemoteImage(
-                url = banner?.imageUrl,
+                url = banner?.previewUrl ?: banner?.imageUrl,
                 placeholder = fill,
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(MaterialTheme.shapes.large),
             ) {
@@ -509,6 +523,9 @@ private fun SharedTransitionScope.GroupDetail(
     banner: Banner?,
     state: InstallState,
     viewModel: DownloadViewModel,
+    /** A version of this update opened to install; replaces the list. */
+    target: String?,
+    page: @Composable (String) -> Unit,
     animatedVisibilityScope: AnimatedVisibilityScope,
 ) {
     val focus = remember { FocusRequester() }
@@ -525,7 +542,7 @@ private fun SharedTransitionScope.GroupDetail(
             .focusable()
             .onKeyEvent { event ->
                 if (event.key == Key.Escape) {
-                    viewModel.openGroup(null)
+                    if (target != null) viewModel.showInstallOptions(null) else viewModel.openGroup(null)
                     true
                 } else false
             },
@@ -533,6 +550,20 @@ private fun SharedTransitionScope.GroupDetail(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shadowElevation = 8.dp,
     ) {
+      val motion = MaterialTheme.motionScheme
+      AnimatedContent(
+        targetState = target,
+        transitionSpec = {
+            val forward = targetState != null
+            (fadeIn(motion.defaultEffectsSpec()) + slideInHorizontally(motion.defaultSpatialSpec()) { if (forward) it / 6 else -it / 6 }) togetherWith
+                (fadeOut(motion.fastEffectsSpec()) + slideOutHorizontally(motion.defaultSpatialSpec()) { if (forward) -it / 6 else it / 6 })
+        },
+        label = "group-page",
+      ) { shown ->
+        if (shown != null) {
+            page(shown)
+            return@AnimatedContent
+        }
         Column {
             Box(Modifier.fillMaxWidth().height(200.dp)) {
                 RemoteImage(banner?.imageUrl, Modifier.matchParentSize(), placeholder = fill)
@@ -586,6 +617,7 @@ private fun SharedTransitionScope.GroupDetail(
                 }
             }
         }
+      }
     }
 }
 
@@ -596,9 +628,15 @@ private fun VersionRow(
     viewModel: DownloadViewModel,
     modifier: Modifier = Modifier,
 ) {
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
+    // The row opens the version's install options; its button installs the game as it is.
+    Surface(
+        onClick = { viewModel.showInstallOptions(version.id) },
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            ShapeIcon(painterResource(Res.drawable.ic_deployed_code), kindShape(version.kind), size = 32.dp)
+            Logo(minecraftLogo(version.kind), 32.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(version.id, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

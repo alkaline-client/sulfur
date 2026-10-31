@@ -38,6 +38,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.jetbrains.compose.resources.painterResource
+import dev.sulfur.util.installDesktopEntry
+import dev.sulfur.util.setWindowClass
+import kotlinx.coroutines.withContext
 import java.awt.Dimension
 import javax.swing.JOptionPane
 import kotlin.system.exitProcess
@@ -77,6 +80,7 @@ fun main() {
     }
     val app = AppContainer(core)
     app.destination.value = startPage()
+    setWindowClass()
 
     application {
         val windowState = rememberWindowState(
@@ -99,7 +103,9 @@ fun main() {
             val logo = painterResource(Res.drawable.sulfur_logo)
             val density = LocalDensity.current
             LaunchedEffect(logo) {
-                window.iconImage = logo.toAwtImage(density, LayoutDirection.Ltr, Size(256f, 256f))
+                val icon = logo.toAwtImage(density, LayoutDirection.Ltr, Size(256f, 256f))
+                window.iconImage = icon
+                withContext(Dispatchers.IO) { installDesktopEntry(icon) }
             }
             val settings by app.repository.settings.collectAsState()
             val seed by app.themeColors.seed.collectAsState()

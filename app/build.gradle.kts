@@ -279,6 +279,16 @@ compose.resources {
 compose.desktop {
     application {
         mainClass = "dev.sulfur.MainKt"
+        // On X11 the window manager moves and resizes the frameless window
+        // (ui/WindowChrome.kt), through AWT's own display connection, and
+        // docks know the window by the class util/LinuxDesktop.kt gives it.
+        if (!isWindows && !isMac) {
+            jvmArgs(
+                "--add-exports=java.desktop/sun.awt=ALL-UNNAMED",
+                "--add-exports=java.desktop/sun.awt.X11=ALL-UNNAMED",
+                "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED",
+            )
+        }
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
@@ -315,7 +325,8 @@ compose.desktop {
 // appended to a small Rust stub that unpacks it into the user's cache on
 // first start and runs it from there (core/sulfur-bundle).
 //
-// ./gradlew :app:packageSingleExecutable
+// The default build: `./gradlew`, `./gradlew build` and `./gradlew assemble`
+// all make it, as does ./gradlew :app:packageSingleExecutable
 //   → build/compose/binaries/main-release/single/Sulfur-<version>-<os>-<arch>[.exe]
 // ---------------------------------------------------------------------------
 
@@ -361,7 +372,10 @@ tasks.register<Exec>("packageSingleExecutable") {
         entry,
         output.absolutePath,
     )
+    doLast { logger.lifecycle("Sulfur executable: ${output.absolutePath}") }
 }
+
+tasks.named("assemble") { dependsOn("packageSingleExecutable") }
 
 // Renders pages to PNG off-screen:
 // ./gradlew :app:screenshots [-Pout=dir] [-Pportable=dir] [-Pshots=launch-light,settings-dark]

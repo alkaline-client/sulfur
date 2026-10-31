@@ -1,6 +1,6 @@
-//! Signed-in Microsoft accounts, kept apart from the settings because they
-//! hold tokens: `accounts.json` in the config folder, readable only by the
-//! user on Unix.
+//! Accounts, kept apart from the settings because Microsoft accounts hold
+//! tokens: `accounts.json` in the config folder, readable only by the user
+//! on Unix. Offline accounts are just player names.
 
 use std::path::{Path, PathBuf};
 
@@ -21,10 +21,17 @@ pub struct MicrosoftAccount {
     pub expires_at: u64,
 }
 
+/// A player name for offline play.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OfflineAccount {
+    pub name: String,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Accounts {
     pub microsoft: Vec<MicrosoftAccount>,
+    pub offline: Vec<OfflineAccount>,
 }
 
 impl Accounts {
@@ -73,6 +80,26 @@ impl Accounts {
     pub fn remove(&mut self, uuid: &str) {
         self.microsoft.retain(|a| a.uuid != uuid);
     }
+
+    /// The offline account with this name, ignoring case as servers do.
+    pub fn find_offline(&self, name: &str) -> Option<&OfflineAccount> {
+        self.offline.iter().find(|a| a.name.eq_ignore_ascii_case(name))
+    }
+}
+
+/// Why a name cannot be an offline player name: empty, longer than 16
+/// characters (the game's limit) or containing spaces or control characters.
+/// Other characters work in single player and on most offline servers.
+pub fn check_offline_name(name: &str) -> Result<(), &'static str> {
+    if name.is_empty() {
+        Err("enter a name")
+    } else if name.chars().count() > 16 {
+        Err("names have at most 16 characters")
+    } else if name.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        Err("names cannot contain spaces")
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -96,6 +123,8 @@ mod tests {
         accounts.upsert(account.clone());
         accounts.upsert(MicrosoftAccount { name: "Alex".into(), ..account });
         assert_eq!(accounts.microsoft.len(), 1);
+        accounts.offline.push(OfflineAccount { name: "Steve".into() });
+        assert!(accounts.find_offline("steve").is_some());
         accounts.save(&path).unwrap();
         assert_eq!(Accounts::load(&path), accounts);
         #[cfg(unix)]
@@ -104,5 +133,20 @@ mod tests {
             assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn older_files_have_no_offline_accounts() {
+        let accounts: Accounts = serde_json::from_str(r#"{"microsoft":[]}"#).unwrap();
+        assert!(accounts.offline.is_empty());
+    }
+
+    #[test]
+    fn checks_offline_names() {
+        assert!(check_offline_name("Steve_01").is_ok());
+        assert!(check_offline_name("史蒂夫").is_ok());
+        assert!(check_offline_name("").is_err());
+        assert!(check_offline_name("a b").is_err());
+        assert!(check_offline_name("abcdefghijklmnopq").is_err());
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,9 +39,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.awt.ComposeWindow
 import com.sun.jna.Library
+import com.sun.jna.Memory
 import com.sun.jna.Native
+import com.sun.jna.NativeLong
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
+import com.sun.jna.ptr.PointerByReference
+import com.sun.jna.ptr.NativeLongByReference
 import dev.sulfur.resources.Res
 import dev.sulfur.resources.action_close
 import dev.sulfur.resources.ic_close
@@ -58,9 +63,11 @@ import java.awt.MouseInfo
 import java.awt.Point
 import java.awt.Rectangle
 import java.awt.Toolkit
+import java.awt.Window
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.awt.event.WindowStateListener
+import java.lang.reflect.Method
 
 private val hostOs = System.getProperty("os.name").lowercase()
 val IsMac = hostOs.startsWith("mac")
@@ -145,12 +152,21 @@ class WindowChrome(private val window: ComposeWindow, private val onClose: () ->
         )
     }
 
-    // Dragging by the title bar. The pointer position comes from AWT in screen
-    // coordinates, so the window moving under the pointer does not feed back.
+    /** True while the window manager moves or resizes the window (X11), so pointer moves are left to it. */
+    private var systemMoving = false
+
+    // Dragging by the title bar. Where the window manager can do it (X11), it
+    // moves the window itself, in step with the pointer as with a native title
+    // bar; otherwise the window follows the pointer, whose position comes from
+    // AWT in screen coordinates, so the window moving under it does not feed back.
     private var dragStart: Point? = null
     private var windowStart: Point? = null
 
     internal fun startDrag() {
+        if (X11MoveResize.start(window, X11MoveResize.MOVE)) {
+            systemMoving = true
+            return
+        }
         val pointer = MouseInfo.getPointerInfo()?.location ?: return
         if (maximized) {
             // Leave the maximized state with the pointer at the same relative spot of the title bar.
@@ -163,6 +179,7 @@ class WindowChrome(private val window: ComposeWindow, private val onClose: () ->
     }
 
     internal fun drag() {
+        if (systemMoving) return
         val start = dragStart ?: return
         val origin = windowStart ?: return
         val pointer = MouseInfo.getPointerInfo()?.location ?: return
@@ -170,20 +187,26 @@ class WindowChrome(private val window: ComposeWindow, private val onClose: () ->
     }
 
     internal fun endDrag() {
+        systemMoving = false
         dragStart = null
         windowStart = null
     }
 
-    // Resizing from the edges of an undecorated window.
+    // Resizing from the edges of an undecorated window, by the window manager where it can.
     private var resizeStart: Point? = null
     private var boundsStart: Rectangle? = null
 
-    internal fun startResize() {
+    internal fun startResize(edge: Edge) {
+        if (X11MoveResize.start(window, edge.x11Direction)) {
+            systemMoving = true
+            return
+        }
         resizeStart = MouseInfo.getPointerInfo()?.location
         boundsStart = window.bounds
     }
 
     internal fun resize(edge: Edge) {
+        if (systemMoving) return
         val start = resizeStart ?: return
         val from = boundsStart ?: return
         val pointer = MouseInfo.getPointerInfo()?.location ?: return
@@ -205,10 +228,17 @@ class WindowChrome(private val window: ComposeWindow, private val onClose: () ->
 
     internal fun dispose() = window.removeWindowStateListener(stateListener)
 
-    enum class Edge(val left: Boolean = false, val top: Boolean = false, val right: Boolean = false, val bottom: Boolean = false) {
-        Left(left = true), Top(top = true), Right(right = true), Bottom(bottom = true),
-        TopLeft(left = true, top = true), TopRight(top = true, right = true),
-        BottomLeft(left = true, bottom = true), BottomRight(right = true, bottom = true),
+    /** [x11Direction]: the edge's `_NET_WM_MOVERESIZE` direction. */
+    enum class Edge(
+        val x11Direction: Int,
+        val left: Boolean = false,
+        val top: Boolean = false,
+        val right: Boolean = false,
+        val bottom: Boolean = false,
+    ) {
+        Left(7, left = true), Top(1, top = true), Right(3, right = true), Bottom(5, bottom = true),
+        TopLeft(0, left = true, top = true), TopRight(2, top = true, right = true),
+        BottomLeft(6, left = true, bottom = true), BottomRight(4, right = true, bottom = true),
     }
 
     private companion object {
@@ -249,11 +279,13 @@ private fun BoxScope.ResizeEdges(chrome: WindowChrome) {
                 .pointerHoverIcon(PointerIcon(Cursor(cursor)))
                 .pointerInput(edge) {
                     detectDragGestures(
-                        onDragStart = { chrome.startResize() },
+                        onDragStart = { chrome.startResize(edge) },
                         onDrag = { change, _ ->
                             change.consume()
                             chrome.resize(edge)
                         },
+                        onDragEnd = { chrome.endDrag() },
+                        onDragCancel = { chrome.endDrag() },
                     )
                 },
         )
@@ -279,8 +311,23 @@ val TrafficLightsWidth = 76.dp
 /** Height the macOS traffic lights take at the top of the window. */
 val TrafficLightsHeight = 28.dp
 
+/**
+ * [content] over the window's drag area. The area lies behind the content, so
+ * only spots without a control of their own move the window: a press on a
+ * button that slips a few pixels, or two quick clicks on page entries, stay
+ * clicks instead of moving or maximizing the window.
+ */
+@Composable
+fun WindowTitleBar(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val chrome = LocalWindowChrome.current
+    Box(modifier) {
+        Spacer(Modifier.matchParentSize().windowTitleBar(chrome))
+        content()
+    }
+}
+
 /** Drags the window by this element and maximizes or restores it on a double click. */
-fun Modifier.windowTitleBar(chrome: WindowChrome?): Modifier =
+private fun Modifier.windowTitleBar(chrome: WindowChrome?): Modifier =
     if (chrome == null) this
     else this
         .pointerInput(chrome) { detectTapGestures(onDoubleTap = { chrome.toggleMaximize() }) }
@@ -374,12 +421,126 @@ private const val DWMWCP_ROUND = 2
 /** A thin title bar for layouts without a top bar: drag area and window buttons. */
 @Composable
 fun TitleStrip(modifier: Modifier = Modifier) {
-    val chrome = LocalWindowChrome.current
-    Row(
-        modifier.fillMaxWidth().height(40.dp).windowTitleBar(chrome),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
-    ) {
-        WindowButtons()
+    WindowTitleBar(modifier.fillMaxWidth().height(40.dp)) {
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+            WindowButtons()
+        }
+    }
+}
+
+/**
+ * `_NET_WM_MOVERESIZE` for X11 (and XWayland): the window manager moves or
+ * resizes the window itself, following the pointer at the display's pace, as
+ * it does for native title bars. Reaches into AWT's X11 toolkit for its
+ * display connection and the frame's X window, which needs
+ * `--add-exports java.desktop/sun.awt=ALL-UNNAMED` and `.../sun.awt.X11=ALL-UNNAMED`
+ * (set in the app's JVM arguments). Anything missing makes [start] return
+ * false and the caller moves the window itself.
+ */
+private object X11MoveResize {
+    const val MOVE = 8
+
+    private interface Xlib : Library {
+        fun XInternAtom(display: Pointer, name: String, onlyIfExists: Boolean): NativeLong
+        fun XDefaultRootWindow(display: Pointer): NativeLong
+        fun XUngrabPointer(display: Pointer, time: NativeLong): Int
+        fun XSendEvent(display: Pointer, window: NativeLong, propagate: Boolean, mask: NativeLong, event: Pointer): Int
+        fun XFlush(display: Pointer): Int
+        fun XGetWindowProperty(
+            display: Pointer, window: NativeLong, property: NativeLong, offset: NativeLong, length: NativeLong,
+            delete: Boolean, type: NativeLong, actualType: NativeLongByReference, actualFormat: IntByReference,
+            items: NativeLongByReference, bytesAfter: NativeLongByReference, data: PointerByReference,
+        ): Int
+        fun XFree(data: Pointer): Int
+    }
+
+    private class AwtX11(val xlib: Xlib, val display: Pointer, val lock: Method, val unlock: Method, val windowOf: (Window) -> Long)
+
+    /** AWT's X11 toolkit, or null on other platforms or without access to it. */
+    private val toolkit: AwtX11? by lazy {
+        runCatching {
+            if (java.awt.Toolkit.getDefaultToolkit().javaClass.name != "sun.awt.X11.XToolkit" || Native.LONG_SIZE != 8) return@lazy null
+            val sunToolkit = Class.forName("sun.awt.SunToolkit")
+            val display = Class.forName("sun.awt.X11.XToolkit").getMethod("getDisplay").invoke(null) as Long
+            val accessor = Class.forName("sun.awt.AWTAccessor").getMethod("getComponentAccessor").invoke(null)
+            val getPeer = Class.forName("sun.awt.AWTAccessor\$ComponentAccessor").getMethod("getPeer", java.awt.Component::class.java)
+            val getWindow = Class.forName("sun.awt.X11.XBaseWindow").getMethod("getWindow")
+            AwtX11(
+                xlib = Native.load("X11", Xlib::class.java),
+                display = Pointer(display),
+                lock = sunToolkit.getMethod("awtLock"),
+                unlock = sunToolkit.getMethod("awtUnlock"),
+                // The frame's own X window (its "shell"), the one the window manager manages.
+                windowOf = { window -> getWindow.invoke(getPeer.invoke(accessor, window)) as Long },
+            )
+        }.getOrNull()
+    }
+
+    /** Whether the window manager announces `_NET_WM_MOVERESIZE`; checked once. */
+    private var supported: Boolean? = null
+
+    /** Asks the window manager to move ([MOVE]) or resize (an edge's direction) [window] with the pointer. */
+    fun start(window: Window, direction: Int): Boolean {
+        if (supported == false) return false
+        val tk = toolkit ?: return false
+        return runCatching {
+            val scale = window.graphicsConfiguration.defaultTransform.scaleX
+            val pointer = MouseInfo.getPointerInfo()?.location ?: return false
+            val shell = tk.windowOf(window).takeIf { it != 0L } ?: return false
+            tk.lock.invoke(null)
+            try {
+                val x = tk.xlib
+                val moveResize = x.XInternAtom(tk.display, "_NET_WM_MOVERESIZE", false)
+                val root = x.XDefaultRootWindow(tk.display)
+                if (supported == null) supported = announced(tk, root, moveResize)
+                if (supported != true) return false
+                // The press that started the drag holds an implicit pointer grab; the
+                // window manager can only take the pointer once it is released.
+                x.XUngrabPointer(tk.display, NativeLong(0))
+                // An XClientMessageEvent in an XEvent-sized buffer (64-bit layout).
+                val event = Memory(192).apply {
+                    clear()
+                    setInt(0, 33) // ClientMessage
+                    setInt(16, 1) // send_event
+                    setPointer(24, tk.display)
+                    setLong(32, shell)
+                    setLong(40, moveResize.toLong())
+                    setInt(48, 32) // format
+                    setLong(56, (pointer.x * scale).toLong())
+                    setLong(64, (pointer.y * scale).toLong())
+                    setLong(72, direction.toLong())
+                    setLong(80, 1) // left button
+                    setLong(88, 1) // source: an application
+                }
+                // SubstructureRedirectMask | SubstructureNotifyMask
+                x.XSendEvent(tk.display, root, false, NativeLong((1L shl 20) or (1L shl 19)), event)
+                x.XFlush(tk.display)
+                true
+            } finally {
+                tk.unlock.invoke(null)
+            }
+        }.getOrDefault(false)
+    }
+
+    /** Whether `_NET_SUPPORTED` on the root window lists [atom]. Called under the AWT lock. */
+    private fun announced(tk: AwtX11, root: NativeLong, atom: NativeLong): Boolean {
+        val x = tk.xlib
+        val type = NativeLongByReference()
+        val format = IntByReference()
+        val count = NativeLongByReference()
+        val after = NativeLongByReference()
+        val data = PointerByReference()
+        val status = x.XGetWindowProperty(
+            tk.display, root, x.XInternAtom(tk.display, "_NET_SUPPORTED", false), NativeLong(0), NativeLong(4096),
+            false, NativeLong(4) /* XA_ATOM */, type, format, count, after, data,
+        )
+        val items = data.value ?: return false
+        try {
+            if (status != 0 || format.value != 32) return false
+            // Format-32 properties come back as an array of C longs.
+            return items.getLongArray(0, count.value.toInt()).any { it == atom.toLong() }
+        } finally {
+            x.XFree(items)
+        }
     }
 }

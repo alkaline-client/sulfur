@@ -229,6 +229,8 @@ pub struct VersionGroup {
 pub struct Banner {
     pub key: String,
     pub image_url: Option<String>,
+    /// A small version of the image for the version grid, when there is one.
+    pub preview_url: Option<String>,
     pub summary: Option<String>,
 }
 

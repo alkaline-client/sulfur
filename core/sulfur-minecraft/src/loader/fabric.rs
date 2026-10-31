@@ -12,6 +12,9 @@ use crate::{
     version::VersionJson,
 };
 
+/// Ornithe's second-generation intermediary mappings, by game version.
+const ORNITHE_INTERMEDIARY: &str = "https://meta.ornithemc.net/v3/versions/gen2/intermediary";
+
 /// Base URL of the loader endpoints; `/{game}` lists versions and
 /// `/{game}/{loader}/profile/json` serves the version JSON.
 fn meta(kind: LoaderKind) -> &'static str {
@@ -39,6 +42,15 @@ pub(super) async fn versions(
         version: String,
         /// Missing on Quilt, whose unstable builds carry a `-beta` suffix instead.
         stable: Option<bool>,
+    }
+    if kind == LoaderKind::Ornithe {
+        // Ornithe's meta lists loader builds for any game version, but only
+        // versions with its intermediary mappings can run them.
+        let url = format!("{ORNITHE_INTERMEDIARY}/{}", encode_component(game_version));
+        let mappings: Vec<serde_json::Value> = fetch_json(downloader, &url, cancel).await?;
+        if mappings.is_empty() {
+            return Ok(Vec::new());
+        }
     }
     let url = format!("{}/{}", meta(kind), encode_component(game_version));
     let entries: Vec<Entry> = fetch_json(downloader, &url, cancel).await?;

@@ -1,11 +1,11 @@
-//! Accounts: the offline player and signed-in Microsoft accounts.
+//! Accounts: signed-in Microsoft accounts and offline player names.
 
 use std::sync::{Arc, Mutex};
 
-use sulfur_core::{Accounts, MicrosoftAccount};
+use sulfur_core::{Accounts, MicrosoftAccount, OfflineAccount};
 use sulfur_download::CancellationToken;
 use sulfur_minecraft::{
-    account::Account,
+    account::{Account, offline_uuid},
     msa::{self, AuthError, MsaClient, Step},
 };
 
@@ -41,13 +41,30 @@ impl From<&MicrosoftAccount> for AccountInfo {
     }
 }
 
+impl From<&OfflineAccount> for AccountInfo {
+    fn from(a: &OfflineAccount) -> Self {
+        Self {
+            id: offline_uuid(&a.name),
+            kind: AccountKind::Offline,
+            name: a.name.clone(),
+            skin_url: None,
+        }
+    }
+}
+
+fn check_name(name: &str) -> Result<String> {
+    let name = name.trim();
+    sulfur_core::check_offline_name(name).map_err(|e| CoreError::Account(e.into()))?;
+    Ok(name.to_owned())
+}
+
 impl State {
     fn msa(&self) -> Result<MsaClient> {
         let id = client_id().ok_or_else(|| CoreError::Account(AuthError::NotConfigured.to_string()))?;
         Ok(MsaClient::new(self.downloader.read().unwrap().http_client(), id))
     }
 
-    fn save_accounts(&self, accounts: &Accounts) -> Result<()> {
+    pub(crate) fn save_accounts(&self, accounts: &Accounts) -> Result<()> {
         accounts
             .save(&Accounts::file(&self.dirs.config))
             .map_err(|e| CoreError::Io(format!("cannot save accounts: {e}")))
@@ -61,33 +78,43 @@ impl State {
         sulfur_minecraft::account::offline_allowed(self.region, self.owns_game())
     }
 
-    /// The account to play with: the selected one if it still exists, else
-    /// offline where allowed, else the first Microsoft account.
-    pub(crate) fn current_account(&self) -> Option<AccountInfo> {
-        let settings = self.settings.read().unwrap();
+    /// Accounts that can be played with here: Microsoft accounts, then
+    /// offline names where offline play is allowed.
+    pub(crate) fn usable_accounts(&self) -> Vec<AccountInfo> {
         let accounts = self.accounts.lock().unwrap();
-        let offline = || AccountInfo {
-            id: String::new(),
-            kind: AccountKind::Offline,
-            name: settings.account.offline_name.clone(),
-            skin_url: None,
-        };
         let offline_allowed = sulfur_minecraft::account::offline_allowed(self.region, !accounts.microsoft.is_empty());
-        let selected = &settings.account.selected;
-        if let Some(account) = accounts.find(selected).filter(|_| !selected.is_empty()) {
-            return Some(account.into());
+        let offline = accounts.offline.iter().filter(|_| offline_allowed);
+        accounts.microsoft.iter().map(Into::into).chain(offline.map(Into::into)).collect()
+    }
+
+    /// The account to play with: the selected one if it can be used, else the
+    /// first offline account where allowed, else the first Microsoft account.
+    pub(crate) fn current_account(&self) -> Option<AccountInfo> {
+        let selected = self.settings.read().unwrap().account.selected.clone();
+        let usable = self.usable_accounts();
+        let first_offline = || usable.iter().find(|a| a.kind == AccountKind::Offline);
+        usable
+            .iter()
+            .find(|a| !selected.is_empty() && a.id == selected)
+            .or_else(first_offline)
+            .or_else(|| usable.first())
+            .cloned()
+    }
+
+    /// Offline names from before they were accounts: the settings' single
+    /// name becomes the first offline account.
+    pub(crate) fn adopt_offline_name(accounts: &mut Accounts, settings: &sulfur_core::Settings) {
+        let name = settings.account.offline_name.trim();
+        if accounts.offline.is_empty() && sulfur_core::check_offline_name(name).is_ok() {
+            accounts.offline.push(OfflineAccount { name: name.to_owned() });
         }
-        if offline_allowed {
-            return Some(offline());
-        }
-        accounts.microsoft.first().map(Into::into)
     }
 
     /// The account to launch with, renewing a Microsoft account's token when needed.
     pub(crate) async fn launch_account(&self) -> Result<Account> {
         let Some(info) = self.current_account() else {
             return Err(CoreError::Account(if self.offline_allowed() {
-                "no account selected".into()
+                "add an offline account or sign in with Microsoft to play".into()
             } else {
                 "sign in with a Microsoft account that owns Minecraft to play".into()
             }));
@@ -99,7 +126,16 @@ impl State {
         let account = if stored.expires_at > msa::now() + RENEW_MARGIN_SECS {
             stored
         } else {
-            self.renew(stored).await?
+            match self.renew(stored.clone()).await {
+                Ok(renewed) => renewed,
+                // Without a connection the old token still starts the game: single
+                // player works, and servers will ask for a new sign-in.
+                Err(CoreError::Network(e)) => {
+                    tracing::warn!(error = %e, "could not renew the Minecraft token, launching with the saved one");
+                    stored
+                }
+                Err(e) => return Err(e),
+            }
         };
         Ok(Account::microsoft(&account.name, &account.uuid, &account.access_token, &account.xuid))
     }
@@ -163,9 +199,10 @@ impl SignInTask {
 
 #[uniffi::export]
 impl SulfurCore {
-    /// Signed-in Microsoft accounts.
+    /// Accounts that can be played with: Microsoft accounts, then offline
+    /// ones where offline play is allowed.
     pub fn accounts(&self) -> Vec<AccountInfo> {
-        self.state.accounts.lock().unwrap().microsoft.iter().map(Into::into).collect()
+        self.state.usable_accounts()
     }
 
     /// The account the game starts with; `None` when there is none to use.
@@ -173,11 +210,49 @@ impl SulfurCore {
         self.state.current_account()
     }
 
-    /// Forgets a Microsoft account and its tokens.
+    /// Forgets a Microsoft account and its tokens, or an offline name.
     pub fn remove_account(&self, id: String) -> Result<()> {
         let mut accounts = self.state.accounts.lock().unwrap();
         accounts.remove(&id);
+        accounts.offline.retain(|a| offline_uuid(&a.name) != id);
         self.state.save_accounts(&accounts)
+    }
+
+    /// Adds an offline account; allowed in mainland China, or next to a
+    /// Microsoft account that owns the game.
+    pub fn add_offline_account(&self, name: String) -> Result<AccountInfo> {
+        let name = check_name(&name)?;
+        if !self.state.offline_allowed() {
+            return Err(CoreError::Account("sign in with a Microsoft account that owns Minecraft to play offline".into()));
+        }
+        let mut accounts = self.state.accounts.lock().unwrap();
+        if accounts.find_offline(&name).is_some() {
+            return Err(CoreError::Account(format!("there is already an offline account named {name}")));
+        }
+        let account = OfflineAccount { name };
+        let info = AccountInfo::from(&account);
+        accounts.offline.push(account);
+        self.state.save_accounts(&accounts)?;
+        Ok(info)
+    }
+
+    /// Renames an offline account. Its UUID follows the name, as on offline
+    /// servers, so worlds see a new player.
+    pub fn rename_offline_account(&self, id: String, name: String) -> Result<AccountInfo> {
+        let name = check_name(&name)?;
+        let mut accounts = self.state.accounts.lock().unwrap();
+        if accounts.find_offline(&name).is_some_and(|a| offline_uuid(&a.name) != id) {
+            return Err(CoreError::Account(format!("there is already an offline account named {name}")));
+        }
+        let index = accounts
+            .offline
+            .iter()
+            .position(|a| offline_uuid(&a.name) == id)
+            .ok_or_else(|| CoreError::Account("account not found".into()))?;
+        accounts.offline[index].name = name;
+        let info = AccountInfo::from(&accounts.offline[index]);
+        self.state.save_accounts(&accounts)?;
+        Ok(info)
     }
 
     /// Starts signing in to a Microsoft account with a device code.

@@ -47,8 +47,10 @@ data class DownloadUiState(
     val query: String = "",
     /** Key of the group shown in the floating card. */
     val openGroup: String? = null,
-    /** Version whose install options dialog is open. */
+    /** Version whose install page is open, in its update's card or on its own. */
     val installTarget: String? = null,
+    /** Loader chosen when the install page opens, once it turns out to be available. */
+    val installLoader: LoaderKind? = null,
     val archive: ArchiveState = ArchiveState(),
 )
 
@@ -112,7 +114,7 @@ class DownloadViewModel(
     fun setQuery(query: String) = _ui.update { it.copy(query = query) }
 
     fun showSection(section: DownloadSection) {
-        _ui.update { it.copy(section = section, openGroup = null) }
+        _ui.update { it.copy(section = section, openGroup = null, installTarget = null) }
         if (section == DownloadSection.Archive && _ui.value.archive.versions.isEmpty()) loadArchive(refresh = false)
     }
 
@@ -135,11 +137,15 @@ class DownloadViewModel(
 
     fun installArchived(id: String) = repository.installArchived(id)
 
-    fun openGroup(key: String?) = _ui.update { it.copy(openGroup = key) }
+    fun openGroup(key: String?) = _ui.update { it.copy(openGroup = key, installTarget = null) }
 
     fun install(versionId: String) = repository.install(versionId)
 
-    fun showInstallOptions(versionId: String?) = _ui.update { it.copy(installTarget = versionId) }
+    fun showInstallOptions(versionId: String?, loader: LoaderKind? = null) =
+        _ui.update { it.copy(installTarget = versionId, installLoader = loader) }
+
+    /** Closes the update's card and any version opened in it. */
+    fun closeCards() = _ui.update { it.copy(openGroup = null, installTarget = null) }
 
     fun install(request: InstallRequest) {
         _ui.update { it.copy(installTarget = null) }

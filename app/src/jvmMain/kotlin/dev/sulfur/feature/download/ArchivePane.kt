@@ -26,8 +26,6 @@ import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
@@ -62,11 +60,14 @@ import dev.sulfur.resources.ic_check_circle
 import dev.sulfur.resources.ic_download
 import dev.sulfur.resources.ic_history_edu
 import dev.sulfur.resources.ic_open_in_new
-import dev.sulfur.resources.ic_refresh
 import dev.sulfur.resources.installed
 import dev.sulfur.resources.no_results
 import dev.sulfur.ui.components.CardSpacing
+import dev.sulfur.ui.components.SearchToolbar
+import dev.sulfur.ui.components.RefreshButton
+import dev.sulfur.ui.components.Notice
 import dev.sulfur.ui.components.ShapeIcon
+import dev.sulfur.resources.archive_search
 import dev.sulfur.util.openUrl
 import androidx.compose.material3.MaterialShapes
 import kotlinx.coroutines.launch
@@ -95,33 +96,23 @@ private val Categories: List<Pair<String, StringResource>> = listOf(
 internal fun ArchivePane(archive: ArchiveState, state: InstallState, viewModel: DownloadViewModel, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(CardSpacing)) {
-        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(Res.drawable.ic_history_edu), null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    stringResource(Res.string.archive_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { scope.launch { openUrl("https://omniarchive.net") } }) {
-                    Icon(painterResource(Res.drawable.ic_open_in_new), null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(Res.string.action_open_in_browser))
-                }
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    if (archive.loading) {
-                        LoadingIndicator(Modifier.size(40.dp))
-                    } else {
-                        IconButton(onClick = { viewModel.loadArchive() }) {
-                            Icon(painterResource(Res.drawable.ic_refresh), stringResource(Res.string.action_refresh_versions))
-                        }
-                    }
-                }
+        SearchToolbar(archive.query, viewModel::setArchiveQuery, stringResource(Res.string.archive_search)) {
+            RefreshButton(archive.loading, stringResource(Res.string.action_refresh_versions), onClick = { viewModel.loadArchive() })
+        }
+        Notice(
+            painterResource(Res.drawable.ic_history_edu),
+            stringResource(Res.string.archive_hint),
+            container = MaterialTheme.colorScheme.surfaceContainerLow,
+            content = MaterialTheme.colorScheme.onSurfaceVariant,
+            iconTint = MaterialTheme.colorScheme.primary,
+        ) {
+            TextButton(onClick = { scope.launch { openUrl("https://omniarchive.net") } }) {
+                Icon(painterResource(Res.drawable.ic_open_in_new), null, Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text(stringResource(Res.string.action_open_in_browser))
             }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             FilterChip(
                 selected = archive.category == null,
                 onClick = { viewModel.showArchiveCategory(null) },

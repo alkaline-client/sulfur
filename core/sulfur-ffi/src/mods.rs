@@ -101,10 +101,9 @@ impl ModsJob {
             if self.kind == sulfur_mods::ProjectKind::Mod {
                 queue.extend(file.required.iter().map(|d| (d.clone(), None)));
             }
-            if file.file_name.contains(['/', '\\']) {
-                continue;
-            }
-            let mut task = DownloadTask::new(&file.url, self.dir.join(&file.file_name))
+            // File names come from Modrinth and CurseForge; skip any that would leave the folder.
+            let Ok(dest) = safe_join(&self.dir, &file.file_name) else { continue };
+            let mut task = DownloadTask::new(&file.url, dest)
                 .size(file.size)
                 .checksum(file.sha1.as_deref().and_then(Checksum::sha1_hex));
             for fallback in &file.fallbacks {

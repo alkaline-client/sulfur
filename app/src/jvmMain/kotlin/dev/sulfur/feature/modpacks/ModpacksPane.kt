@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -24,7 +23,6 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -45,13 +43,10 @@ import dev.sulfur.feature.mods.SortMenu
 import dev.sulfur.ffi.ModpackVersion
 import dev.sulfur.resources.Res
 import dev.sulfur.resources.action_cancel
-import dev.sulfur.resources.action_close
 import dev.sulfur.resources.action_install
 import dev.sulfur.resources.action_load_more
 import dev.sulfur.resources.action_retry
-import dev.sulfur.resources.ic_close
 import dev.sulfur.resources.ic_folder_open
-import dev.sulfur.resources.ic_search
 import dev.sulfur.resources.install_dialog_title
 import dev.sulfur.resources.install_name
 import dev.sulfur.resources.modpack_name_hint
@@ -65,6 +60,7 @@ import dev.sulfur.resources.modpacks_search
 import dev.sulfur.resources.n_files
 import dev.sulfur.resources.no_results
 import dev.sulfur.ui.components.CardSpacing
+import dev.sulfur.ui.components.SearchToolbar
 import dev.sulfur.ui.components.loaderName
 import dev.sulfur.util.chooseFile
 import org.jetbrains.compose.resources.painterResource
@@ -79,19 +75,7 @@ fun ModpacksPane(viewModel: ModpacksViewModel, modifier: Modifier = Modifier) {
     val chooseTitle = stringResource(Res.string.modpacks_from_file)
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(CardSpacing)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(
-                value = ui.query,
-                onValueChange = viewModel::setQuery,
-                placeholder = { Text(stringResource(Res.string.modpacks_search), maxLines = 1) },
-                leadingIcon = { Icon(painterResource(Res.drawable.ic_search), null) },
-                trailingIcon = if (ui.query.isNotEmpty()) {
-                    { IconButton(onClick = { viewModel.setQuery("") }) { Icon(painterResource(Res.drawable.ic_close), stringResource(Res.string.action_close)) } }
-                } else null,
-                singleLine = true,
-                shape = CircleShape,
-                modifier = Modifier.weight(1f),
-            )
+        SearchToolbar(ui.query, viewModel::setQuery, stringResource(Res.string.modpacks_search)) {
             SortMenu(ui.sort, viewModel::setSort)
             FilledTonalButton(
                 onClick = { chooseFile(chooseTitle, listOf("mrpack"))?.let(viewModel::openFile) },

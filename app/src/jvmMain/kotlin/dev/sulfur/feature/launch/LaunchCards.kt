@@ -104,9 +104,9 @@ import dev.sulfur.ui.components.ConnectedChoice
 import dev.sulfur.ui.components.Markdown
 import dev.sulfur.ui.components.RemoteImage
 import dev.sulfur.ui.components.SectionCard
-import dev.sulfur.ui.components.ShapeIcon
+import dev.sulfur.ui.components.Logo
+import dev.sulfur.ui.components.minecraftLogo
 import dev.sulfur.ui.components.kindLabel
-import dev.sulfur.ui.components.kindShape
 import dev.sulfur.util.openUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -301,11 +301,23 @@ private sealed interface Loaded<out T> {
     data class Failed(val message: String) : Loaded<Nothing>
 }
 
+/**
+ * What cards loaded earlier this session, by key: a card coming back with the
+ * page shows it at once instead of a loading indicator and a second layout
+ * pass, and refreshes it quietly.
+ */
+private val loadedCards = HashMap<String, Loaded<*>>()
+
 @Composable
-private fun <T> rememberLoaded(key: Any?, load: suspend () -> T): Loaded<T>? {
-    var state by remember(key) { mutableStateOf<Loaded<T>?>(null) }
+private fun <T> rememberLoaded(key: String, load: suspend () -> T): Loaded<T>? {
+    @Suppress("UNCHECKED_CAST")
+    var state by remember(key) { mutableStateOf(loadedCards[key] as Loaded<T>?) }
     LaunchedEffect(key) {
-        state = runCatching { load() }.fold({ Loaded.Ok(it) }, { Loaded.Failed(it.message ?: it.toString()) })
+        val loaded = runCatching { load() }.fold({ Loaded.Ok(it) }, { Loaded.Failed(it.message ?: it.toString()) })
+        if (loaded is Loaded.Ok || state !is Loaded.Ok) {
+            state = loaded
+            loadedCards[key] = loaded
+        }
     }
     return state
 }
@@ -323,7 +335,7 @@ private val NewsDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
 
 @Composable
 private fun NewsContent(repository: SulfurRepository) {
-    val state = rememberLoaded(Unit) { repository.launcherNews(false) }
+    val state = rememberLoaded("news") { repository.launcherNews(false) }
     LoadedContent(state) { news ->
         if (news.isEmpty()) Hint(stringResource(Res.string.widget_empty))
         news.take(4).forEach { NewsRow(it) }
@@ -356,7 +368,7 @@ private fun NewsRow(entry: NewsEntry) {
 
 @Composable
 private fun VersionsContent(repository: SulfurRepository) {
-    val state = rememberLoaded(Unit) { repository.versionList(false) }
+    val state = rememberLoaded("versions") { repository.versionList(false) }
     val installed by repository.installed.collectAsState()
     val installs by repository.installs.collectAsState()
     LoadedContent<VersionList>(state) { list ->
@@ -364,7 +376,7 @@ private fun VersionsContent(repository: SulfurRepository) {
             val remote = list.versions.firstOrNull { it.id == id } ?: return@forEach
             val task = installs.firstOrNull { it.versionId == id && it.isRunning }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ShapeIcon(painterResource(Res.drawable.ic_layers), kindShape(remote.kind), size = 36.dp)
+                Logo(minecraftLogo(remote.kind), 36.dp)
                 Column(Modifier.weight(1f)) {
                     Text(id, style = MaterialTheme.typography.titleSmall)
                     Text(kindLabel(remote.kind), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -418,7 +430,7 @@ private fun MarkdownContent(repository: SulfurRepository, location: String) {
         Hint(stringResource(Res.string.widget_empty))
         return
     }
-    val state = rememberLoaded(location) { repository.readDocument(location.trim()) }
+    val state = rememberLoaded("document:$location") { repository.readDocument(location.trim()) }
     LoadedContent(state) { text -> Markdown(text, Modifier.fillMaxWidth()) }
 }
 

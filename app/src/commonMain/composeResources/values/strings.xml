@@ -53,8 +53,6 @@
     <string name="msg_install_first">Install a version first</string>
     <string name="msg_mod_installed">Installed %1$s</string>
     <string name="msg_list_installed">Installed %1$s from the download list into %2$s</string>
-    <string name="list_title">Download list</string>
-    <string name="list_hint">Click results to add or remove them. Ctrl-click (⌘-click on macOS) an Install button to start a list.</string>
     <string name="list_install_all">Install all</string>
     <string name="list_clear">Clear</string>
     <string name="list_add_tip">Ctrl-click to start a download list</string>
@@ -80,6 +78,12 @@
     <string name="account_edit_name">Change offline name</string>
     <string name="account_ms_unavailable">Microsoft sign-in is not set up in this build of Sulfur.</string>
     <string name="account_need_microsoft">Sign in with a Microsoft account that owns Minecraft: Java Edition to play.</string>
+    <string name="account_add_offline">Add offline account</string>
+    <string name="account_rename">Rename</string>
+    <string name="account_remove">Remove %1$s</string>
+    <string name="account_offline_name_warning">Some servers only accept 3–16 letters, digits and underscores.</string>
+    <string name="account_need_any">Add an offline account or sign in with Microsoft to play.</string>
+    <string name="account_offline_unlocked">Offline accounts can be used now that a Microsoft account that owns the game is signed in.</string>
     <string name="signin_starting">Contacting Microsoft…</string>
     <string name="signin_instructions">Open %1$s in a browser and enter this code:</string>
     <string name="signin_copy_open">Copy code and open page</string>
@@ -200,21 +204,24 @@
     <!-- Install dialog -->
     <string name="install_dialog_title">Install %1$s</string>
     <string name="install_loader">Mod loader</string>
-    <string name="install_loader_none">None</string>
     <string name="install_vanilla_hint">Installs the game as it is. You can add a mod loader later.</string>
     <string name="install_loader_version">Loader version</string>
-    <string name="install_no_loader_versions">This loader has no version for this Minecraft version.</string>
     <string name="install_name">Version name</string>
     <string name="install_name_hint">Shown in the version list; saves and mods are kept per name.</string>
     <string name="install_fabric_api">Add Fabric API</string>
     <string name="install_fabric_api_hint">Most Fabric mods need it.</string>
     <string name="install_optifine_hint">OptiFine runs on its own here. To use it with Forge, install Forge and add OptiFine as a mod.</string>
-    <string name="install_more_loaders">More loaders</string>
     <string name="install_rift_hint">Rift is no longer developed. It only runs Minecraft 1.13.2.</string>
     <string name="install_cleanroom_hint">Cleanroom runs Forge mods for 1.12.2 on modern Java. Sulfur downloads Java 21 for it if needed.</string>
     <string name="install_cleanroom_page_hint">The Cleanroom team asks launchers to send players to its download page. Pick an installer there and Sulfur installs it.</string>
     <string name="install_cleanroom_open_page">Open download page</string>
     <string name="install_cleanroom_picked">Installer %1$s</string>
+    <string name="loader_unavailable">Unavailable</string>
+    <string name="loader_load_failed">Could not load</string>
+    <string name="loader_latest">Latest %1$s</string>
+    <string name="install_loader_pick_hint">Pick a mod loader, or none to install the game as it is.</string>
+    <string name="install_name_taken">A version named %1$s already exists.</string>
+    <string name="install_installed_hint">This version is installed. Pick a mod loader to add it as a new version.</string>
     <string name="cleanroom_page_title">Download Cleanroom</string>
     <string name="cleanroom_page_hint">Click Download → Installer for the build you want. Sulfur takes it from there.</string>
     <string name="cleanroom_page_unavailable">The page cannot be shown inside Sulfur on this system. Open it in your browser, download an installer, then choose the file.</string>
@@ -245,6 +252,9 @@
     <string name="mods_folder_data_packs">Data packs in %1$s</string>
     <string name="mods_folder_shaders">Shaders in %1$s</string>
     <string name="mods_folder_empty">Nothing here yet.</string>
+    <string name="version_mods_open_folder">Open folder</string>
+    <string name="version_mods_find">Find more</string>
+    <string name="version_mods_count">%1$d of %2$d turned on</string>
     <string name="mods_shaders_hint">Shaders need Iris (Fabric, Quilt, NeoForge) or OptiFine.</string>
     <string name="mods_no_version">Install a version first. Mods need a version with a mod loader such as Fabric, Forge or NeoForge.</string>
     <string name="mods_no_loader">This version has no mod loader. Install it again with Fabric, Forge or NeoForge from Game versions to add mods.</string>
@@ -347,7 +357,8 @@
         <item>Google Sans Flex typeface (SIL Open Font License)</item>
         <item>MiSans typeface by Xiaomi, used for Chinese and Japanese (MiSans font license)</item>
         <item>Material Symbols icons (Apache License 2.0)</item>
-        <item>Update artwork from Mojang’s launcher content and the Minecraft Wiki</item>
+        <item>Update artwork by Mojang Studios, from the Minecraft Update Artwork archive (TQNL), the launcher’s content and the Minecraft Wiki</item>
+        <item>Minecraft, mod loader and OptiFine logos belong to their projects</item>
         <item>Mod search by Modrinth and CurseForge; MCIM mirror by mcmod-info-mirror</item>
         <item>BMCLAPI download mirror by bangbang93</item>
         <item>Lost versions preserved by Omniarchive</item>

@@ -41,8 +41,6 @@
     <string name="msg_install_first">請先安裝一個版本</string>
     <string name="msg_mod_installed">已安裝 %1$s</string>
     <string name="msg_list_installed">已將下載清單中的 %1$s 個項目安裝到 %2$s</string>
-    <string name="list_title">下載清單</string>
-    <string name="list_hint">點選結果以新增或移除。按住 Ctrl（macOS 上為 ⌘）點選「安裝」可開始一個清單。</string>
     <string name="list_install_all">全部安裝</string>
     <string name="list_clear">清除</string>
     <string name="list_add_tip">按住 Ctrl 點選以開始下載清單</string>
@@ -64,6 +62,12 @@
     <string name="account_edit_name">修改離線使用者名稱</string>
     <string name="account_ms_unavailable">此版本的 Sulfur 未設定 Microsoft 帳號登入。</string>
     <string name="account_need_microsoft">請登入擁有 Minecraft: Java Edition 的 Microsoft 帳號以開始遊戲。</string>
+    <string name="account_add_offline">新增離線帳號</string>
+    <string name="account_rename">重新命名</string>
+    <string name="account_remove">移除 %1$s</string>
+    <string name="account_offline_name_warning">部分伺服器只接受 3–16 個英文字母、數字和底線。</string>
+    <string name="account_need_any">新增離線帳號或登入 Microsoft 帳號以開始遊戲。</string>
+    <string name="account_offline_unlocked">已登入擁有遊戲的 Microsoft 帳號，現在可以使用離線帳號。</string>
     <string name="signin_starting">正在連線至 Microsoft…</string>
     <string name="signin_instructions">在瀏覽器中開啟 %1$s 並輸入以下代碼：</string>
     <string name="signin_copy_open">複製代碼並開啟網頁</string>
@@ -174,21 +178,24 @@
     <string name="install_with_loader">連同模組載入器安裝…</string>
     <string name="install_dialog_title">安裝 %1$s</string>
     <string name="install_loader">模組載入器</string>
-    <string name="install_loader_none">無</string>
     <string name="install_vanilla_hint">安裝原版遊戲。之後也可以再加入模組載入器。</string>
     <string name="install_loader_version">載入器版本</string>
-    <string name="install_no_loader_versions">此載入器沒有適用於該 Minecraft 版本的版本。</string>
     <string name="install_name">版本名稱</string>
     <string name="install_name_hint">顯示在版本清單中；存檔和模組依名稱分別儲存。</string>
     <string name="install_fabric_api">加入 Fabric API</string>
     <string name="install_fabric_api_hint">大多數 Fabric 模組都需要它。</string>
     <string name="install_optifine_hint">此處 OptiFine 單獨執行。若要與 Forge 一起使用，請安裝 Forge，再將 OptiFine 作為模組加入。</string>
-    <string name="install_more_loaders">更多載入器</string>
     <string name="install_rift_hint">Rift 已停止開發，僅支援 Minecraft 1.13.2。</string>
     <string name="install_cleanroom_hint">Cleanroom 讓 1.12.2 的 Forge 模組在新版 Java 上執行。如有需要，Sulfur 會為它下載 Java 21。</string>
     <string name="install_cleanroom_page_hint">Cleanroom 團隊希望啟動器將玩家引導至其下載頁面。在那裡選擇一個安裝程式，Sulfur 會完成安裝。</string>
     <string name="install_cleanroom_open_page">開啟下載頁面</string>
     <string name="install_cleanroom_picked">安裝程式 %1$s</string>
+    <string name="loader_unavailable">不可用</string>
+    <string name="loader_load_failed">載入失敗</string>
+    <string name="loader_latest">最新 %1$s</string>
+    <string name="install_loader_pick_hint">選擇一個模組載入器，不選則安裝原版遊戲。</string>
+    <string name="install_name_taken">已有名為 %1$s 的版本。</string>
+    <string name="install_installed_hint">此版本已安裝。選擇模組載入器，將其安裝為新版本。</string>
     <string name="cleanroom_page_title">下載 Cleanroom</string>
     <string name="cleanroom_page_hint">為你想要的組建點選 Download → Installer，剩下的交給 Sulfur。</string>
     <string name="cleanroom_page_unavailable">此系統無法在 Sulfur 內顯示該頁面。請在瀏覽器中開啟它，下載安裝程式，然後選擇該檔案。</string>
@@ -217,6 +224,9 @@
     <string name="mods_folder_data_packs">%1$s 中的資料包</string>
     <string name="mods_folder_shaders">%1$s 中的光影包</string>
     <string name="mods_folder_empty">這裡還什麼都沒有。</string>
+    <string name="version_mods_open_folder">開啟資料夾</string>
+    <string name="version_mods_find">尋找更多</string>
+    <string name="version_mods_count">已啟用 %1$d / %2$d</string>
     <string name="mods_shaders_hint">光影包需要 Iris（Fabric、Quilt、NeoForge）或 OptiFine。</string>
     <string name="mods_no_version">請先安裝一個版本。模組需要裝有 Fabric、Forge 或 NeoForge 等模組載入器的版本。</string>
     <string name="mods_no_loader">此版本沒有模組載入器。請在「遊戲版本」中搭配 Fabric、Forge 或 NeoForge 重新安裝，才能加入模組。</string>
@@ -315,7 +325,8 @@
         <item>Google Sans Flex 字型（SIL 開放字型授權）</item>
         <item>小米 MiSans 字型，用於中文和日文（MiSans 字型授權協議）</item>
         <item>Material Symbols 圖示（Apache License 2.0）</item>
-        <item>更新封面圖來自 Mojang 啟動器內容和 Minecraft Wiki</item>
+        <item>更新封面圖由 Mojang Studios 創作，來自 Minecraft Update Artwork 典藏（TQNL）、啟動器內容和 Minecraft Wiki</item>
+        <item>Minecraft、模組載入器和 OptiFine 的標誌歸各自專案所有</item>
         <item>模組搜尋由 Modrinth 和 CurseForge 提供；MCIM 鏡像由 mcmod-info-mirror 提供</item>
         <item>BMCLAPI 下載鏡像由 bangbang93 提供</item>
         <item>失傳版本由 Omniarchive 保存</item>

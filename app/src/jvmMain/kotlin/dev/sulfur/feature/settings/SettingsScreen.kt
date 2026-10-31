@@ -145,11 +145,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import dev.sulfur.data.isRunning
+import dev.sulfur.ui.components.SideNavItem
 import dev.sulfur.data.rememberBackgroundImage
 import dev.sulfur.ffi.NavigationPosition
 import dev.sulfur.resources.ic_check
@@ -232,16 +232,11 @@ fun SettingsScreen(repository: SulfurRepository, misc: MiscViewModel, themeColor
     var category by rememberSaveable { mutableStateOf(Category.Appearance) }
 
     Row(Modifier.fillMaxSize().padding(horizontal = PagePadding, vertical = 12.dp)) {
-        Column(Modifier.width(232.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.width(200.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             PageHeader(stringResource(Res.string.settings_title))
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Category.entries.forEach { item ->
-                NavigationDrawerItem(
-                    label = { Text(stringResource(item.title)) },
-                    icon = { Icon(painterResource(item.icon), null) },
-                    selected = item == category,
-                    onClick = { category = item },
-                )
+                SideNavItem(stringResource(item.title), item.icon, selected = item == category, onClick = { category = item })
             }
         }
         Spacer(Modifier.width(CardSpacing))

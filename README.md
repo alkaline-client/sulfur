@@ -24,11 +24,15 @@ with Google's **Material 3 Expressive** components.
   options in `versions/<id>/`; switch to a shared folder globally or per version.
 - **Mod loaders and mods.** Install Fabric (with Fabric API), Quilt, Forge,
   NeoForge, OptiFine, Legacy Fabric, Ornithe, Cleanroom (1.12.2) or Rift
-  (1.13.2); Forge-style installers run locally like the official ones. The
+  (1.13.2); Forge-style installers run locally like the official ones.
+  Opening a version shows every loader with its logo, and loaders that do
+  not support that version as unavailable. The
   Mods & resources tab of the Download page searches Modrinth, CurseForge or
   both at once (the same project on both sites shows as one result) for mods,
   resource packs, data packs and shaders, and installs mods with their
-  required dependencies into a version's own folders.
+  required dependencies into a version's own folders. Each version's
+  settings page lists its mods, resource packs and shaders to turn on or
+  off or remove.
 - **Modpacks.** The Modpacks tab searches Modrinth and installs a pack (or a
   `.mrpack` file from disk) as a version of its own: the game, its mod loader,
   the pack's files and its overrides, in an isolated folder.
@@ -44,7 +48,10 @@ with Google's **Material 3 Expressive** components.
 - **Log4Shell patched** for Minecraft 1.7–1.18.0 with Mojang's fixed logging
   configuration and JVM arguments (can be turned off).
 - **Every update at a glance.** The Download page shows each major update as a
-  card with its official artwork; open one to see its releases and snapshots.
+  card with its official key art (from the
+  [Minecraft Update Artwork](https://github.com/TQNL/minecraft-update-artwork)
+  archive, the launcher and the Minecraft Wiki); open one to see its releases
+  and snapshots.
   Betas, alphas and Mojang's April Fools versions have cards of their own.
   Search finds versions by id or by update name, in English or the UI language
   (`caves`, `洞穴`).
@@ -97,6 +104,17 @@ font files, so it is not in the repository. Offline, pass
 `-Psulfur.cjkFont=/path/to/MiSansVF.ttf`, or `-Psulfur.cjkFont=none` to build
 without it (the system's CJK font is used instead).
 
+The default build makes the whole app one executable for this OS
+(`app/build/compose/binaries/main-release/single/Sulfur-<version>-<os>-<arch>`);
+`./gradlew build` and `./gradlew :app:packageSingleExecutable` make it too:
+
+```bash
+./gradlew
+```
+
+To run from the sources instead, or to make the usual installers
+(DMG, MSI, DEB, RPM, AppImage):
+
 ```bash
 ./gradlew :app:run
 ```
@@ -105,14 +123,7 @@ without it (the system's CJK font is used instead).
 ./gradlew :app:packageDistributionForCurrentOS
 ```
 
-Or the whole app as one executable for this OS
-(`app/build/compose/binaries/main-release/single/Sulfur-<version>-<os>-<arch>`):
-
-```bash
-./gradlew :app:packageSingleExecutable
-```
-
-It carries the app folder compressed inside it, unpacks it once into the
+The executable carries the app folder compressed inside it, unpacks it once into the
 user's cache (about a second) and starts it from there; later starts reuse
 it. On macOS a DMG is still the better download, since Finder opens a bare
 executable in Terminal.
@@ -154,7 +165,8 @@ Microsoft accounts sign in with a device code (the build needs an
 application ID, see [docs/MICROSOFT_SIGN_IN.md](docs/MICROSOFT_SIGN_IN.md)).
 Offline accounts are available in mainland China, where Minecraft: Java
 Edition is not sold (the region comes from the system time zone, as in HMCL),
-and elsewhere next to a signed-in Microsoft account that owns the game.
+and elsewhere next to a signed-in Microsoft account that owns the game;
+add as many offline names as you like from the account menu.
 
 Planned: CurseForge modpacks and Alkaline Client.
 See [docs/PLATFORMS.md](docs/PLATFORMS.md) for platform support details.

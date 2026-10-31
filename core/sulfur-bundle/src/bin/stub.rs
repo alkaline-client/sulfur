@@ -34,7 +34,7 @@ fn run() -> io::Result<()> {
         unpack(&mut file, &payload, &root, &dir)?;
         remove_older(&root, &payload.meta.id);
     }
-    start(&dir.join(&payload.meta.entry), std::env::args_os().skip(1).collect())
+    start(&dir.join(&payload.meta.entry), &exe, std::env::args_os().skip(1).collect())
 }
 
 /// Unpacks into a temporary folder first, so an interrupted run never leaves
@@ -84,16 +84,24 @@ fn remove_older(root: &Path, keep: &str) {
     }
 }
 
+/// The app, told where this executable is (`SULFUR_EXECUTABLE`) so it can
+/// point desktop entries at it rather than at the unpacked copy.
+fn command(program: &PathBuf, exe: &Path, args: Vec<OsString>) -> Command {
+    let mut command = Command::new(program);
+    command.args(args).env("SULFUR_EXECUTABLE", exe);
+    command
+}
+
 #[cfg(unix)]
-fn start(program: &PathBuf, args: Vec<OsString>) -> io::Result<()> {
+fn start(program: &PathBuf, exe: &Path, args: Vec<OsString>) -> io::Result<()> {
     use std::os::unix::process::CommandExt;
     // Replaces this process, so exit codes and signals reach the caller as usual.
-    Err(Command::new(program).args(args).exec())
+    Err(command(program, exe, args).exec())
 }
 
 #[cfg(windows)]
-fn start(program: &PathBuf, args: Vec<OsString>) -> io::Result<()> {
-    Command::new(program).args(args).spawn().map(drop)
+fn start(program: &PathBuf, exe: &Path, args: Vec<OsString>) -> io::Result<()> {
+    command(program, exe, args).spawn().map(drop)
 }
 
 #[cfg(windows)]

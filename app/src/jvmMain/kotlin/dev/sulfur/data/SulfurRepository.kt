@@ -85,16 +85,17 @@ class SulfurRepository(
     val settings: StateFlow<Settings> = _settings.asStateFlow()
 
     private val _accounts = MutableStateFlow(core.accounts())
-    /** Signed-in Microsoft accounts. */
+    /** Accounts that can be played with: Microsoft accounts, then offline ones where allowed. */
     val accounts: StateFlow<List<AccountInfo>> = _accounts.asStateFlow()
 
     /**
-     * The account Play uses, by the core's rule: the selected Microsoft account,
-     * else offline where allowed, else the first Microsoft account.
+     * The account Play uses, by the core's rule: the selected account, else
+     * the first offline account, else the first Microsoft account.
      */
-    val currentAccount: StateFlow<AccountInfo?> = combine(_settings, _accounts, _accountPolicy) { s, accounts, policy ->
+    val currentAccount: StateFlow<AccountInfo?> = combine(_settings, _accounts) { s, accounts ->
         accounts.firstOrNull { s.selectedAccount.isNotEmpty() && it.id == s.selectedAccount }
-            ?: if (policy.offlineAllowed) AccountInfo("", AccountKind.OFFLINE, s.offlineName, null) else accounts.firstOrNull()
+            ?: accounts.firstOrNull { it.kind == AccountKind.OFFLINE }
+            ?: accounts.firstOrNull()
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
     private val _installed = MutableStateFlow<List<InstalledVersion>>(emptyList())
@@ -235,8 +236,24 @@ class SulfurRepository(
         return core.launch(versionId)
     }
 
-    /** Plays with [account] from now on (empty id: offline). */
+    /** Plays with [account] from now on. */
     fun selectAccount(account: AccountInfo) = updateSettings { it.copy(selectedAccount = account.id) }
+
+    /** Adds an offline account and plays with it; fails with a message for the user. */
+    suspend fun addOfflineAccount(name: String): Result<AccountInfo> = runCatching {
+        withContext(Dispatchers.IO) { core.addOfflineAccount(name) }
+    }.onSuccess {
+        accountsChanged()
+        selectAccount(it)
+    }
+
+    suspend fun renameOfflineAccount(account: AccountInfo, name: String): Result<AccountInfo> = runCatching {
+        withContext(Dispatchers.IO) { core.renameOfflineAccount(account.id, name) }
+    }.onSuccess {
+        val wasCurrent = currentAccount.value?.id == account.id
+        accountsChanged()
+        if (wasCurrent) selectAccount(it)
+    }
 
     /** Starts a Microsoft sign-in; poll the task, then call [accountsChanged]. */
     fun signInMicrosoft(): SignInTask = core.signInMicrosoft()

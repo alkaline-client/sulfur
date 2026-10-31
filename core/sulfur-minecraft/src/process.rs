@@ -108,14 +108,44 @@ impl GameProcess {
     }
 }
 
+/// Reads output until the process closes it. Lines are read as bytes: Java
+/// writes in the system's code page (GBK on Chinese Windows), and stopping at
+/// the first byte that is not UTF-8 would leave the pipe full and the game
+/// blocked on its next log line.
 async fn pump(stream: impl AsyncRead + Unpin, logs: Arc<Mutex<LogBuffer>>) {
-    let mut lines = BufReader::new(stream).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
+    let mut reader = BufReader::new(stream);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let text = String::from_utf8_lossy(&line);
+        let text = text.trim_end_matches(['\n', '\r']).to_owned();
         let mut logs = logs.lock().unwrap();
         if logs.lines.len() == LOG_CAPACITY {
             logs.lines.pop_front();
             logs.first += 1;
         }
-        logs.lines.push_back(line);
+        logs.lines.push_back(text);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn keeps_reading_past_bytes_that_are_not_utf8() {
+        let logs = Arc::new(Mutex::new(LogBuffer::default()));
+        // "游戏" in GBK, then more output.
+        let output: &[u8] = b"first\r\n\xd3\xce\xcf\xb7 started\nlast";
+        pump(output, logs.clone()).await;
+        let logs = logs.lock().unwrap();
+        assert_eq!(logs.lines.len(), 3);
+        assert_eq!(logs.lines[0], "first");
+        assert!(logs.lines[1].ends_with(" started"));
+        assert_eq!(logs.lines[2], "last");
     }
 }

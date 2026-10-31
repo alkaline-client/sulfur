@@ -62,6 +62,13 @@ import dev.sulfur.ffi.SignInStage
 import dev.sulfur.ffi.SignInTask
 import dev.sulfur.resources.Res
 import dev.sulfur.resources.account_add_microsoft
+import dev.sulfur.resources.account_add_offline
+import dev.sulfur.resources.account_need_any
+import dev.sulfur.resources.account_offline_name_warning
+import dev.sulfur.resources.account_offline_unlocked
+import dev.sulfur.resources.account_remove
+import dev.sulfur.resources.account_rename
+import dev.sulfur.resources.action_add
 import dev.sulfur.resources.account_edit_name
 import dev.sulfur.resources.account_microsoft
 import dev.sulfur.resources.account_ms_unavailable
@@ -107,8 +114,10 @@ internal fun AccountCard(repository: SulfurRepository) {
     val accounts by repository.accounts.collectAsState()
     val policy by repository.accountPolicy.collectAsState()
     var signingIn by remember { mutableStateOf(false) }
-    var editingName by remember { mutableStateOf(false) }
+    // The offline account being renamed, or a new one (id empty).
+    var naming by remember { mutableStateOf<AccountInfo?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    val newOffline = { AccountInfo("", AccountKind.OFFLINE, "", null) }
 
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         val current = account
@@ -116,14 +125,34 @@ internal fun AccountCard(repository: SulfurRepository) {
             // Outside mainland China nothing can be played without a Microsoft account.
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    stringResource(if (policy.microsoftAvailable) Res.string.account_need_microsoft else Res.string.account_ms_unavailable),
+                    stringResource(
+                        when {
+                            policy.offlineAllowed -> Res.string.account_need_any
+                            policy.microsoftAvailable -> Res.string.account_need_microsoft
+                            else -> Res.string.account_ms_unavailable
+                        }
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = { signingIn = true }, enabled = policy.microsoftAvailable, shapes = ButtonDefaults.shapes()) {
-                    Icon(painterResource(Res.drawable.ic_person), null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(Res.string.account_sign_in))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (policy.offlineAllowed) {
+                        Button(onClick = { naming = newOffline() }, shapes = ButtonDefaults.shapes()) {
+                            Icon(painterResource(Res.drawable.ic_add), null, Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                            Text(stringResource(Res.string.account_add_offline))
+                        }
+                    }
+                    val signIn = @Composable {
+                        Icon(painterResource(Res.drawable.ic_person), null, Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(stringResource(Res.string.account_sign_in))
+                    }
+                    if (policy.offlineAllowed) {
+                        FilledTonalButton(onClick = { signingIn = true }, enabled = policy.microsoftAvailable, shapes = ButtonDefaults.shapes()) { signIn() }
+                    } else {
+                        Button(onClick = { signingIn = true }, enabled = policy.microsoftAvailable, shapes = ButtonDefaults.shapes()) { signIn() }
+                    }
                 }
             }
             return@Surface
@@ -140,7 +169,7 @@ internal fun AccountCard(repository: SulfurRepository) {
                 )
             }
             if (current.kind == AccountKind.OFFLINE) {
-                IconButton(onClick = { editingName = true }) {
+                IconButton(onClick = { naming = current }) {
                     Icon(painterResource(Res.drawable.ic_edit), stringResource(Res.string.account_edit_name), Modifier.size(20.dp))
                 }
             }
@@ -149,14 +178,20 @@ internal fun AccountCard(repository: SulfurRepository) {
                     Icon(painterResource(Res.drawable.ic_arrow_drop_down), stringResource(Res.string.account_switch))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    val choices = accounts + listOfNotNull(
-                        AccountInfo("", AccountKind.OFFLINE, repository.settings.value.offlineName, null).takeIf { policy.offlineAllowed }
-                    )
-                    choices.forEach { choice ->
+                    accounts.forEach { choice ->
                         DropdownMenuItem(
-                            text = { Text(choice.name) },
+                            text = {
+                                Column {
+                                    Text(choice.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        stringResource(if (choice.kind == AccountKind.MICROSOFT) Res.string.account_microsoft else Res.string.account_offline),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
                             leadingIcon = { AccountAvatar(choice, 28.dp) },
-                            trailingIcon = if (choice.id == current.id && choice.kind == current.kind) {
+                            trailingIcon = if (choice.id == current.id) {
                                 { Icon(painterResource(Res.drawable.ic_check), null) }
                             } else null,
                             onClick = {
@@ -175,9 +210,37 @@ internal fun AccountCard(repository: SulfurRepository) {
                             signingIn = true
                         },
                     )
-                    if (current.kind == AccountKind.MICROSOFT) {
+                    if (policy.offlineAllowed) {
                         DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.account_sign_out, current.name)) },
+                            text = { Text(stringResource(Res.string.account_add_offline)) },
+                            leadingIcon = { Icon(painterResource(Res.drawable.ic_person), null) },
+                            onClick = {
+                                menuOpen = false
+                                naming = newOffline()
+                            },
+                        )
+                    }
+                    HorizontalDivider()
+                    if (current.kind == AccountKind.OFFLINE) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.account_rename)) },
+                            leadingIcon = { Icon(painterResource(Res.drawable.ic_edit), null) },
+                            onClick = {
+                                menuOpen = false
+                                naming = current
+                            },
+                        )
+                    }
+                    run {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (current.kind == AccountKind.MICROSOFT) Res.string.account_sign_out else Res.string.account_remove,
+                                        current.name,
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(painterResource(Res.drawable.ic_delete), null) },
                             onClick = {
                                 menuOpen = false
@@ -192,8 +255,8 @@ internal fun AccountCard(repository: SulfurRepository) {
     if (signingIn) {
         SignInDialog(repository, onDismiss = { signingIn = false })
     }
-    if (editingName) {
-        OfflineNameDialog(repository, onDismiss = { editingName = false })
+    naming?.let { account ->
+        OfflineNameDialog(repository, account, onDismiss = { naming = null })
     }
 }
 
@@ -232,32 +295,58 @@ internal fun AccountAvatar(account: AccountInfo, size: Dp) {
     }
 }
 
+/** Names a new offline account ([account] with an empty id) or renames one. */
 @Composable
-private fun OfflineNameDialog(repository: SulfurRepository, onDismiss: () -> Unit) {
-    var name by remember { mutableStateOf(repository.settings.value.offlineName) }
+private fun OfflineNameDialog(repository: SulfurRepository, account: AccountInfo, onDismiss: () -> Unit) {
+    val adding = account.id.isEmpty()
+    var name by remember { mutableStateOf(account.name) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val save = {
+        scope.launch {
+            val result = if (adding) repository.addOfflineAccount(name) else repository.renameOfflineAccount(account, name)
+            result.onSuccess { onDismiss() }.onFailure { error = it.message }
+        }
+        Unit
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.account_edit_name)) },
+        icon = { Icon(painterResource(Res.drawable.ic_person), null) },
+        title = { Text(stringResource(if (adding) Res.string.account_add_offline else Res.string.account_edit_name)) },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it.take(16) },
-                label = { Text(stringResource(Res.string.launch_offline_name)) },
-                supportingText = { Text(stringResource(Res.string.launch_offline_hint)) },
-                singleLine = true,
-            )
+            Column(Modifier.widthIn(min = 320.dp, max = 440.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it.take(16)
+                        error = null
+                    },
+                    label = { Text(stringResource(Res.string.launch_offline_name)) },
+                    supportingText = {
+                        Text(
+                            error ?: stringResource(
+                                if (name.isEmpty() || PortableName.matches(name)) Res.string.launch_offline_hint
+                                else Res.string.account_offline_name_warning
+                            )
+                        )
+                    },
+                    isError = error != null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    repository.updateSettings { it.copy(offlineName = name.trim().ifEmpty { "Player" }) }
-                    onDismiss()
-                },
-            ) { Text(stringResource(Res.string.action_save)) }
+            TextButton(onClick = save, enabled = name.isNotBlank()) {
+                Text(stringResource(if (adding) Res.string.action_add else Res.string.action_save))
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_cancel)) } },
     )
 }
+
+/** Names every server accepts. */
+private val PortableName = Regex("[A-Za-z0-9_]{3,16}")
 
 /**
  * Microsoft sign-in with a device code: the player enters the code shown here
@@ -276,7 +365,11 @@ private fun SignInDialog(repository: SulfurRepository, onDismiss: () -> Unit) {
                 val now = started.snapshot()
                 snapshot = now
                 if (now.stage == SignInStage.DONE) {
+                    val offlineBefore = repository.accountPolicy.value.offlineAllowed
                     repository.accountsChanged()
+                    if (!offlineBefore && repository.accountPolicy.value.offlineAllowed) {
+                        repository.notify(UiMessage(Res.string.account_offline_unlocked))
+                    }
                     now.account?.let {
                         repository.selectAccount(it)
                         repository.notify(UiMessage(Res.string.msg_signed_in, it.name))

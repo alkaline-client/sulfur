@@ -1,5 +1,7 @@
 package dev.sulfur.feature.launch
 
+import dev.sulfur.ffi.ProjectKind
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -77,6 +79,7 @@ import dev.sulfur.resources.action_play
 import dev.sulfur.resources.action_close
 import dev.sulfur.resources.action_stop
 import dev.sulfur.resources.ic_arrow_drop_down
+import dev.sulfur.resources.ic_check
 import dev.sulfur.resources.ic_download
 import dev.sulfur.resources.ic_person
 import dev.sulfur.resources.ic_play_arrow
@@ -99,7 +102,11 @@ import dev.sulfur.ui.components.CardSpacing
 import dev.sulfur.ui.components.PagePadding
 import dev.sulfur.ui.components.SectionCard
 import dev.sulfur.ui.components.ShapeIcon
+import dev.sulfur.ui.components.Logo
+import dev.sulfur.ui.components.loaderLogo
 import dev.sulfur.ui.components.loaderName
+import dev.sulfur.ui.components.versionLabel
+import dev.sulfur.ui.components.minecraftLogo
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -109,6 +116,8 @@ fun LaunchScreen(
     repository: SulfurRepository,
     misc: MiscViewModel,
     onBrowseVersions: () -> Unit,
+    /** Shows the Download page's search for a version's mods, resource packs or shaders. */
+    onBrowseMods: (versionId: String, kind: ProjectKind) -> Unit,
 ) {
     val runtimes by misc.java.collectAsState()
     val installed by repository.installed.collectAsState()
@@ -140,7 +149,13 @@ fun LaunchScreen(
         label = "launch-page",
     ) { version ->
         if (version != null) {
-            VersionSettingsPage(version, repository, runtimes.orEmpty(), onBack = { viewModel.versionSettingsOpen.value = false })
+            VersionSettingsPage(
+                version,
+                repository,
+                runtimes.orEmpty(),
+                onBack = { viewModel.versionSettingsOpen.value = false },
+                onFindMods = { kind -> onBrowseMods(version.id, kind) },
+            )
             return@AnimatedContent
         }
         // The Play column (who plays, Play with the version, its settings) sits
@@ -205,12 +220,12 @@ private fun PlayButton(
     onStop: () -> Unit,
 ) {
     val height = SplitButtonDefaults.LargeContainerHeight
-    val version = selected?.let { v -> v.loader?.let { "${v.id} · ${loaderName(it)}" } ?: v.id }.orEmpty()
+    val version = selected?.let(::versionLabel).orEmpty()
     if (state is GameState.Running) {
         Button(
             onClick = onStop,
             shapes = ButtonDefaults.shapesFor(height),
-            modifier = Modifier.heightIn(height).widthIn(min = PlayButtonMinWidth),
+            modifier = Modifier.heightIn(height).width(PlayButtonWidth),
             contentPadding = ButtonDefaults.contentPaddingFor(height),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,
@@ -230,7 +245,7 @@ private fun PlayButton(
                 enabled = enabled && canPlay,
                 shapes = SplitButtonDefaults.leadingButtonShapesFor(height),
                 contentPadding = SplitButtonDefaults.leadingButtonContentPaddingFor(height),
-                modifier = Modifier.heightIn(height).widthIn(min = PlayButtonMinWidth),
+                modifier = Modifier.heightIn(height).width(PlayButtonWidth),
             ) {
                 ButtonLabel(Res.drawable.ic_play_arrow, stringResource(Res.string.action_play), version, height)
             }
@@ -255,7 +270,11 @@ private fun PlayButton(
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     installed.forEach { v ->
                         DropdownMenuItem(
-                            text = { Text(v.loader?.let { "${v.id} · ${loaderName(it)}" } ?: v.id) },
+                            text = { Text(versionLabel(v)) },
+                            leadingIcon = { Logo(v.loader?.let(::loaderLogo) ?: minecraftLogo(), 24.dp) },
+                            trailingIcon = if (v.id == selected?.id) {
+                                { Icon(painterResource(Res.drawable.ic_check), null) }
+                            } else null,
                             onClick = {
                                 onSelect(v.id)
                                 menuOpen = false
@@ -268,7 +287,12 @@ private fun PlayButton(
     )
 }
 
-private val PlayButtonMinWidth = 260.dp
+/**
+ * Play's width: what the 440 dp column leaves beside the version menu and the
+ * settings button. Fixed, so a long version name is cut short instead of
+ * pushing the settings button out of the column.
+ */
+private val PlayButtonWidth = 260.dp
 
 @Composable
 private fun ButtonLabel(icon: DrawableResource, action: String, version: String, height: Dp) {

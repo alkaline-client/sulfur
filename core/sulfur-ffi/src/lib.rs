@@ -60,7 +60,14 @@ struct State {
     news: Mutex<Option<Vec<NewsEntry>>>,
     region: Region,
     accounts: Mutex<sulfur_core::Accounts>,
+    loader_versions: Mutex<HashMap<(loader::LoaderKind, String), FetchedLoaderVersions>>,
 }
+
+/// Loader versions for one loader and game version, and when they were fetched.
+type FetchedLoaderVersions = (std::time::Instant, Vec<LoaderVersion>);
+
+/// How long a list of loader versions is reused before it is fetched again.
+const LOADER_VERSIONS_TTL: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
 #[uniffi::export]
 impl SulfurCore {
@@ -79,7 +86,8 @@ impl SulfurCore {
             sulfur_core::Settings::default()
         });
         let downloader = build_downloader(&settings)?;
-        let accounts = sulfur_core::Accounts::load(&sulfur_core::Accounts::file(&dirs.config));
+        let mut accounts = sulfur_core::Accounts::load(&sulfur_core::Accounts::file(&dirs.config));
+        State::adopt_offline_name(&mut accounts, &settings);
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .thread_name("sulfur-core")
             .enable_all()
@@ -99,6 +107,7 @@ impl SulfurCore {
                 news: Mutex::new(None),
                 region: Region::detect(),
                 accounts: Mutex::new(accounts),
+                loader_versions: Mutex::new(HashMap::new()),
             }),
         }))
     }
@@ -157,8 +166,17 @@ impl SulfurCore {
     pub fn import_launcher_config(&self, config: ForeignConfig, use_game_dir: bool) -> Result<Settings> {
         let mut current = self.state.settings.write().unwrap();
         let before = current.download.clone();
-        sulfur_core::import::ForeignConfig::from(config).apply(&mut current, use_game_dir);
+        let config = sulfur_core::import::ForeignConfig::from(config);
+        config.apply(&mut current, use_game_dir);
         current.save(&self.state.dirs.settings_file())?;
+        // Its offline player comes along as an account (where offline play is allowed, it can be used).
+        if let Some(name) = config.offline_name.as_deref().map(str::trim) {
+            let mut accounts = self.state.accounts.lock().unwrap();
+            if accounts.find_offline(name).is_none() && sulfur_core::check_offline_name(name).is_ok() {
+                accounts.offline.push(sulfur_core::OfflineAccount { name: name.to_owned() });
+                self.state.save_accounts(&accounts)?;
+            }
+        }
         if current.download != before {
             *self.state.downloader.write().unwrap() = build_downloader(&current)?;
         }
@@ -462,22 +480,31 @@ impl SulfurCore {
         Ok(task)
     }
 
-    /// Versions of a loader available for a game version, newest first.
+    /// Versions of a loader available for a game version, newest first;
+    /// empty when the loader does not support it. Kept for a while, so
+    /// opening a version again does not ask every loader's server again.
     pub async fn loader_versions(&self, kind: LoaderKind, game_version: String) -> Result<Vec<LoaderVersion>> {
+        let key = (loader::LoaderKind::from(kind), game_version);
+        if let Some((at, versions)) = self.state.loader_versions.lock().unwrap().get(&key)
+            && at.elapsed() < LOADER_VERSIONS_TTL
+        {
+            return Ok(versions.clone());
+        }
         let downloader = self.state.downloader.read().unwrap().clone();
+        let (kind, game_version) = key.clone();
         let found = self
             .runtime
-            .spawn(async move {
-                loader::versions(&downloader, kind.into(), &game_version, &CancellationToken::new()).await
-            })
+            .spawn(async move { loader::versions(&downloader, kind, &game_version, &CancellationToken::new()).await })
             .await??;
-        Ok(found
+        let versions: Vec<LoaderVersion> = found
             .into_iter()
             .map(|v| LoaderVersion {
                 version: v.version,
                 stable: v.stable,
             })
-            .collect())
+            .collect();
+        self.state.loader_versions.lock().unwrap().insert(key, (std::time::Instant::now(), versions.clone()));
+        Ok(versions)
     }
 
     /// Artwork for each version group. Cached in memory and on disk; `refresh`
@@ -489,7 +516,8 @@ impl SulfurCore {
         let state = self.state.clone();
         self.runtime
             .spawn(async move {
-                let cache_file = state.dirs.cache.join("banners.json");
+                // Versioned: older caches lack newer artwork sources.
+                let cache_file = state.dirs.cache.join("banners-v3.json");
                 let from_disk = || -> Option<Vec<banners::Banner>> {
                     serde_json::from_slice(&std::fs::read(&cache_file).ok()?).ok()
                 };
@@ -520,6 +548,7 @@ impl SulfurCore {
                     .map(|b| Banner {
                         key: b.key,
                         image_url: b.image_url,
+                        preview_url: b.preview_url,
                         summary: b.summary,
                     })
                     .collect();

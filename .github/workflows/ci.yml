@@ -35,8 +35,12 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace
       - name: Package app
-        run: ./gradlew :app:packageDistributionForCurrentOS --stacktrace
+        run: ./gradlew :app:packageSingleExecutable :app:packageDistributionForCurrentOS --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: sulfur-${{ matrix.name }}
+          path: app/build/compose/binaries/main-release/single/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sulfur-${{ matrix.name }}-installers
           path: app/build/compose/binaries/main/*/

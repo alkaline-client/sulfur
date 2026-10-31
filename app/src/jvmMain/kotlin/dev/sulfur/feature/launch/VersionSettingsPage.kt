@@ -1,5 +1,14 @@
 package dev.sulfur.feature.launch
 
+import dev.sulfur.ui.components.minecraftLogo
+import dev.sulfur.ui.components.loaderLogo
+import dev.sulfur.ui.components.Logo
+import dev.sulfur.ui.components.SideNavItem
+import androidx.compose.material3.TextButton
+import dev.sulfur.ffi.ProjectKind
+import dev.sulfur.resources.download_section_mods
+import dev.sulfur.resources.ic_extension
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,7 +33,6 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -139,6 +147,7 @@ private fun String.orInherit(): String? = takeIf { it.isNotBlank() }
 
 private enum class VersionSection(val title: StringResource, val icon: DrawableResource) {
     General(Res.string.version_tab_general, Res.drawable.ic_stack),
+    Mods(Res.string.download_section_mods, Res.drawable.ic_extension),
     Java(Res.string.version_tab_java, Res.drawable.ic_coffee),
     Advanced(Res.string.version_tab_advanced, Res.drawable.ic_science),
 }
@@ -157,6 +166,8 @@ internal fun VersionSettingsPage(
     repository: SulfurRepository,
     runtimes: List<JavaRuntime>,
     onBack: () -> Unit,
+    /** Opens the Download page's search for this version's mods, resource packs or shaders. */
+    onFindMods: (ProjectKind) -> Unit,
 ) {
     val global by repository.settings.collectAsState()
     val loaded = remember(version.id) { runCatching { repository.versionSettings(version.id) }.getOrDefault(NoOverrides) }
@@ -180,44 +191,37 @@ internal fun VersionSettingsPage(
     }
     var section by rememberSaveable { mutableStateOf(VersionSection.General) }
 
-    Row(
+    Column(
         Modifier.fillMaxSize().padding(horizontal = PagePadding, vertical = 12.dp).onPreviewKeyEvent { event ->
             (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onBack() }
         },
     ) {
-        Column(Modifier.width(232.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilledTonalIconButton(onClick = onBack, shapes = IconButtonDefaults.shapes()) {
-                    Icon(painterResource(Res.drawable.ic_arrow_back), stringResource(Res.string.action_back))
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(Res.string.launch_version_settings),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(version.id, style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-            Spacer(Modifier.height(12.dp))
+      // The version across the top, so its whole name fits.
+      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+          FilledTonalIconButton(onClick = onBack, shapes = IconButtonDefaults.shapes()) {
+              Icon(painterResource(Res.drawable.ic_arrow_back), stringResource(Res.string.action_back))
+          }
+          Logo(version.loader?.let(::loaderLogo) ?: minecraftLogo(), 36.dp)
+          Column(Modifier.weight(1f)) {
+              Text(
+                  stringResource(Res.string.launch_version_settings),
+                  style = MaterialTheme.typography.labelMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              Text(version.id, style = MaterialTheme.typography.titleLargeEmphasized, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+      }
+      Spacer(Modifier.height(12.dp))
+      Row(Modifier.weight(1f)) {
+        Column(Modifier.width(200.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             VersionSection.entries.forEach { item ->
-                NavigationDrawerItem(
-                    label = { Text(stringResource(item.title)) },
-                    icon = { Icon(painterResource(item.icon), null) },
-                    selected = item == section,
-                    onClick = { section = item },
-                )
+                SideNavItem(stringResource(item.title), item.icon, selected = item == section, onClick = { section = item })
             }
             Spacer(Modifier.weight(1f))
-            OutlinedButton(
-                onClick = { draft = NoOverrides },
-                enabled = draft != NoOverrides,
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            TextButton(onClick = { draft = NoOverrides }, enabled = draft != NoOverrides) {
                 Icon(painterResource(Res.drawable.ic_restart_alt), null, Modifier.size(ButtonDefaults.IconSize))
                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(stringResource(Res.string.version_reset), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(Res.string.version_reset), maxLines = 2)
             }
         }
         Spacer(Modifier.width(CardSpacing))
@@ -234,11 +238,13 @@ internal fun VersionSettingsPage(
             ) {
                 when (shown) {
                     VersionSection.General -> GeneralSection(version, repository, draft, global, ::edit)
+                    VersionSection.Mods -> VersionModsSection(version, repository, onFindMods)
                     VersionSection.Java -> JavaSection(draft, global, runtimes, ::edit)
                     VersionSection.Advanced -> AdvancedSection(draft, global, ::edit)
                 }
             }
         }
+      }
     }
 }
 

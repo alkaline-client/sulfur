@@ -1,5 +1,6 @@
 package dev.sulfur.feature.misc
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -18,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -52,7 +53,7 @@ import dev.sulfur.resources.ic_coffee
 import dev.sulfur.resources.ic_description
 import dev.sulfur.resources.ic_folder_open
 import dev.sulfur.resources.ic_info
-import dev.sulfur.resources.ic_rocket_launch_filled
+import dev.sulfur.resources.sulfur_logo
 import dev.sulfur.resources.java_looking
 import dev.sulfur.resources.java_none
 import dev.sulfur.resources.java_runtimes
@@ -61,7 +62,6 @@ import dev.sulfur.resources.launcher_log_empty
 import dev.sulfur.ui.components.CardSpacing
 import dev.sulfur.ui.components.PagePadding
 import dev.sulfur.ui.components.SectionCard
-import dev.sulfur.ui.components.ShapeIcon
 import dev.sulfur.util.openFolder
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -102,14 +102,8 @@ fun MiscScreen(viewModel: MiscViewModel, repository: SulfurRepository) {
 private fun About(repository: SulfurRepository) {
     Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            ShapeIcon(
-                painterResource(Res.drawable.ic_rocket_launch_filled),
-                MaterialShapes.SoftBurst,
-                size = 72.dp,
-                container = MaterialTheme.colorScheme.tertiary,
-                content = MaterialTheme.colorScheme.onTertiary,
-                rotating = true,
-            )
+            // The same mark as the title bar and the window icon.
+            Image(painterResource(Res.drawable.sulfur_logo), contentDescription = null, modifier = Modifier.size(72.dp))
             Spacer(Modifier.width(20.dp))
             Column {
                 Text("Sulfur", style = MaterialTheme.typography.headlineMediumEmphasized, color = MaterialTheme.colorScheme.onTertiaryContainer)

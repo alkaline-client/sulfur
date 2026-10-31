@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.Density
 import dev.sulfur.AppContainer
 import dev.sulfur.feature.download.DownloadSection
 import dev.sulfur.ffi.LaunchColumn
+import dev.sulfur.ffi.LoaderKind
 import dev.sulfur.ffi.LaunchWidget
 import dev.sulfur.ffi.NavigationPosition
 import dev.sulfur.ffi.WidgetKind
@@ -52,7 +53,17 @@ private suspend fun render(args: Array<String>) {
     val only = args.getOrNull(2).orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     val app = AppContainer(SulfurCore(args.getOrNull(1)))
 
-    class Shot(val name: String, val page: Destination, val theme: ThemeMode, val after: () -> Unit = {}, val setup: () -> Unit = {})
+    class Shot(
+        val name: String,
+        val page: Destination,
+        val theme: ThemeMode,
+        val after: () -> Unit = {},
+        /** Time for loads the shot starts (loader versions) before its last frames. */
+        val settleMillis: Long = 0,
+        val width: Int = 1280,
+        val setup: () -> Unit = {},
+    )
+    val newestRelease = { app.download.ui.value.groups.firstOrNull { it.releases.isNotEmpty() } }
     val navigation = app.repository.settings.value.navigation
     val launchPage = app.repository.settings.value.let { it.launchColumn to it.launchWidgets }
     // One card of each kind; the Markdown card reads a page written next to the shots.
@@ -86,6 +97,57 @@ private suspend fun render(args: Array<String>) {
         // The floating card of the newest release group.
         Shot("download-card-light", Destination.Download, ThemeMode.LIGHT) {
             app.download.openGroup(app.download.ui.value.groups.firstOrNull { it.releases.isNotEmpty() }?.key)
+        } +
+        // A release's install page inside its update's card, with every loader asked.
+        Shot("download-version-light", Destination.Download, ThemeMode.LIGHT, settleMillis = 6_000) {
+            newestRelease()?.let { group ->
+                app.download.openGroup(group.key)
+                app.download.showInstallOptions(group.releases.first().id)
+            }
+        } +
+        Shot("download-version-dark", Destination.Download, ThemeMode.DARK, settleMillis = 6_000) {
+            newestRelease()?.let { group ->
+                app.download.openGroup(group.key)
+                app.download.showInstallOptions(group.releases.first().id)
+            }
+        } +
+        // Fabric chosen: its version, Fabric API and the new version's name.
+        Shot("download-version-fabric-light", Destination.Download, ThemeMode.LIGHT, settleMillis = 6_000) {
+            newestRelease()?.let { group ->
+                app.download.openGroup(group.key)
+                app.download.showInstallOptions(group.releases.first().id, LoaderKind.FABRIC)
+            }
+        } +
+        // An old version opened from search: Legacy Fabric, Ornithe and OptiFine instead of Fabric and Forge's newer loaders.
+        Shot("download-version-search-light", Destination.Download, ThemeMode.LIGHT, settleMillis = 6_000) {
+            app.download.setQuery("1.8.9")
+            app.download.showInstallOptions("1.8.9")
+        } +
+        Shot("download-version-zh-cn", Destination.Download, ThemeMode.LIGHT, settleMillis = 6_000) {
+            app.repository.updateSettings { it.copy(language = "zh-CN") }
+            app.download.showInstallOptions("1.12.2")
+        } +
+        // A narrow window with a long loader version on Play.
+        Shot("launch-narrow-dark", Destination.Launch, ThemeMode.DARK, width = 900) {
+            app.repository.installed.value.maxByOrNull { it.id.length }?.let { app.launch.select(it.id) }
+        } +
+        // A dozen mods picked for a Forge version, in a narrow window.
+        Shot("download-mods-list-narrow-dark", Destination.Download, ThemeMode.DARK, width = 900, settleMillis = 4_000, after = {
+            app.mods.ui.value.hits.take(12).forEach(app.mods::toggleListed)
+        }) {
+            app.repository.installed.value.firstOrNull { it.loader == LoaderKind.FORGE }?.let { app.mods.selectVersion(it.id) }
+            app.download.showSection(DownloadSection.Mods)
+        } +
+        Shot("misc-dark", Destination.Misc, ThemeMode.DARK) +
+        // The oldest updates and April Fools, at the end of the grid.
+        Shot("download-oldest-dark", Destination.Download, ThemeMode.DARK) {
+            app.download.setQuery("")
+            app.download.ui.value.groups.lastOrNull()?.let { app.download.openGroup(it.key) }
+            app.download.openGroup(null)
+        } +
+        Shot("launch-version-mods-dark", Destination.Launch, ThemeMode.DARK) {
+            app.repository.installed.value.firstOrNull { it.loader == LoaderKind.FORGE }?.let { app.launch.select(it.id) }
+            app.launch.versionSettingsOpen.value = true
         } +
         Shot("download-archive-light", Destination.Download, ThemeMode.LIGHT) {
             app.download.showSection(DownloadSection.Archive)
@@ -147,7 +209,7 @@ private suspend fun render(args: Array<String>) {
 
     for (shot in shots) {
         app.destination.value = shot.page
-        val scene = ImageComposeScene(width = 1280, height = 820, density = Density(1f)) {
+        val scene = ImageComposeScene(width = shot.width, height = 820, density = Density(1f)) {
             val settings by app.repository.settings.collectAsState()
             LocalizedApp(settings.language) {
                 SulfurTheme(shot.theme, settings.seedColor.toLong(), settings.highContrast) {
@@ -168,7 +230,12 @@ private suspend fun render(args: Array<String>) {
         withTimeoutOrNull(60_000) { while (app.download.ui.value.archive.loading) delay(100) }
         frames(4)
         withTimeoutOrNull(30_000) { while (app.modpacks.ui.value.loading) delay(100) }
+        withTimeoutOrNull(30_000) { while (app.mods.ui.value.loading) delay(100) }
         shot.after()
+        if (shot.settleMillis > 0) {
+            frames(2)
+            delay(shot.settleMillis)
+        }
         withTimeoutOrNull(30_000) {
             while ((app.modpacks.ui.value.target as? PackTarget.Remote)?.versions == null && app.modpacks.ui.value.target != null) delay(100)
         }
@@ -178,6 +245,7 @@ private suspend fun render(args: Array<String>) {
         println("wrote ${File(out, "${shot.name}.png")}")
         scene.close()
         app.download.showSection(DownloadSection.Game)
+        app.download.closeCards()
         app.download.setQuery("")
         app.modpacks.close()
         app.launch.customizing.value = false

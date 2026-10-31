@@ -1,7 +1,12 @@
 //! Artwork for major updates.
 //!
-//! The official launcher's patch notes carry key art for every version since
-//! 1.13; older updates fall back to the lead image of their Minecraft Wiki page.
+//! First choice is the official key art, without logos, collected in the
+//! Minecraft Update Artwork archive (github.com/TQNL/minecraft-update-artwork),
+//! which also has small previews for the version grid. Updates it lacks use
+//! the official launcher's patch notes (key art for every version since 1.13),
+//! then the lead image of their Minecraft Wiki page. April Fools uses the
+//! launcher banner of the newest joke, which the wiki keeps as `File:<id>.jpg`.
+//! Summaries always come from the patch notes.
 
 use std::collections::HashMap;
 
@@ -13,14 +18,33 @@ use crate::{McError, Result, groups::VersionGroup};
 pub const PATCH_NOTES_URL: &str = "https://launchercontent.mojang.com/v2/javaPatchNotes.json";
 const LAUNCHER_CONTENT: &str = "https://launchercontent.mojang.com";
 const WIKI_API: &str = "https://minecraft.wiki/api.php";
+const ARTWORK_ARCHIVE: &str = "https://raw.githubusercontent.com/TQNL/minecraft-update-artwork/main/";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Banner {
     /// Group key, see [`VersionGroup::key`].
     pub key: String,
     pub image_url: Option<String>,
+    /// A small version of the image for the version grid, when there is one.
+    #[serde(default)]
+    pub preview_url: Option<String>,
     /// One or two sentences from the update's patch notes.
     pub summary: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct Catalogue {
+    assets: Vec<CatalogueAsset>,
+}
+
+#[derive(Deserialize)]
+struct CatalogueAsset {
+    update: String,
+    file: String,
+    preview: Option<String>,
+    classification: String,
+    #[serde(default)]
+    primary: bool,
 }
 
 #[derive(Deserialize)]
@@ -52,13 +76,30 @@ pub async fn fetch(downloader: &Downloader, groups: &[VersionGroup], cancel: &Ca
             HashMap::new()
         }
     };
+    let archive: HashMap<String, CatalogueAsset> = match fetch_json::<Catalogue>(downloader, &format!("{ARTWORK_ARCHIVE}catalogue.json"), cancel).await {
+        Ok(catalogue) => catalogue
+            .assets
+            .into_iter()
+            // The archive's own pick per update, and only Mojang's artwork (not fan art or reconstructions).
+            .filter(|a| a.primary && a.classification == "Official artwork")
+            .map(|a| (update_key(&a.update), a))
+            .collect(),
+        Err(e) => {
+            tracing::warn!(error = %e, "artwork archive unavailable");
+            HashMap::new()
+        }
+    };
     let mut banners: Vec<Banner> = groups
         .iter()
         .map(|g| {
             let note = g.representative().and_then(|v| notes.get(&v.id));
+            let art = g.name.and_then(|name| archive.get(&update_key(name)));
             Banner {
                 key: g.key.clone(),
-                image_url: note.and_then(|n| n.image.as_ref()).map(|i| absolute(&i.url)),
+                image_url: art
+                    .map(|a| format!("{ARTWORK_ARCHIVE}{}", a.file))
+                    .or_else(|| note.and_then(|n| n.image.as_ref()).map(|i| absolute(&i.url))),
+                preview_url: art.and_then(|a| a.preview.as_ref()).map(|p| format!("{ARTWORK_ARCHIVE}{p}")),
                 summary: note.and_then(|n| n.short_text.as_deref()).map(summarize),
             }
         })
@@ -70,8 +111,19 @@ pub async fn fetch(downloader: &Downloader, groups: &[VersionGroup], cancel: &Ca
         .filter(|(_, b)| b.image_url.is_none())
         .map(|(i, _)| i)
         .collect();
+    // April Fools: the newest joke's launcher banner.
+    if let Some(i) = missing.iter().copied().find(|&i| groups[i].kind == crate::groups::GroupKind::AprilFools)
+        && let Some(newest) = groups[i].representative()
+    {
+        let file = format!("File:{}.jpg", newest.id);
+        match wiki_files(downloader, std::slice::from_ref(&file), cancel).await {
+            Ok(found) => banners[i].image_url = found.get(&file).cloned(),
+            Err(e) => tracing::warn!(error = %e, "wiki files unavailable"),
+        }
+    }
+    let missing: Vec<usize> = missing.into_iter().filter(|&i| banners[i].image_url.is_none()).collect();
     if !missing.is_empty() {
-        let titles: Vec<String> = missing.iter().map(|&i| wiki_title(&banners[i].key)).collect();
+        let titles: Vec<String> = missing.iter().map(|&i| wiki_title(&groups[i])).collect();
         match wiki_images(downloader, &titles, cancel).await {
             Ok(found) => {
                 for (&i, title) in missing.iter().zip(&titles) {
@@ -84,12 +136,25 @@ pub async fn fetch(downloader: &Downloader, groups: &[VersionGroup], cancel: &Ca
     banners
 }
 
-fn wiki_title(key: &str) -> String {
-    match key {
+/// An update's name reduced to letters and digits, so "Caves & Cliffs: Part II"
+/// matches "Caves and Cliffs Part II" and "World of Color" matches "World of Color Update".
+fn update_key(name: &str) -> String {
+    let words = name.to_lowercase().replace('&', " and ");
+    let key: String = words.chars().filter(char::is_ascii_alphanumeric).collect();
+    let key = key.strip_prefix("the").unwrap_or(&key);
+    key.strip_suffix("update").unwrap_or(key).to_owned()
+}
+
+/// The wiki page about a group; the newest joke's page for April Fools.
+fn wiki_title(group: &VersionGroup) -> String {
+    match group.key.as_str() {
         "beta" => "Java Edition Beta".into(),
         "alpha" => "Java Edition Alpha".into(),
-        crate::groups::APRIL_FOOLS => "April Fools' Day".into(),
-        _ => format!("Java Edition {key}"),
+        crate::groups::APRIL_FOOLS => match group.representative() {
+            Some(newest) => format!("Java Edition {}", newest.id),
+            None => "April Fools' Day jokes".into(),
+        },
+        key => format!("Java Edition {key}"),
     }
 }
 
@@ -107,6 +172,17 @@ async fn wiki_images(
     struct Query {
         #[serde(default)]
         pages: HashMap<String, Page>,
+        /// Titles spelled differently than asked, then pages moved elsewhere
+        /// ("Java Edition 1.0" is "Java Edition 1.0.0").
+        #[serde(default)]
+        normalized: Vec<Rename>,
+        #[serde(default)]
+        redirects: Vec<Rename>,
+    }
+    #[derive(Deserialize)]
+    struct Rename {
+        from: String,
+        to: String,
     }
     #[derive(Deserialize)]
     struct Page {
@@ -123,17 +199,74 @@ async fn wiki_images(
     for chunk in titles.chunks(50) {
         let joined = chunk.iter().map(|t| t.replace(' ', "_")).collect::<Vec<_>>().join("|");
         let url = format!(
-            "{WIKI_API}?action=query&format=json&prop=pageimages&piprop=original&titles={}",
+            "{WIKI_API}?action=query&format=json&prop=pageimages&piprop=original&redirects=1&titles={}",
             sulfur_download::encode_component(&joined)
         );
-        let response: Response = fetch_json(downloader, &url, cancel).await?;
-        for page in response.query.map(|q| q.pages).unwrap_or_default().into_values() {
-            if let Some(original) = page.original {
-                found.insert(page.title, original.source);
+        let Some(query) = fetch_json::<Response>(downloader, &url, cancel).await?.query else { continue };
+        let renamed: HashMap<&str, &str> = query
+            .normalized
+            .iter()
+            .chain(&query.redirects)
+            .map(|r| (r.from.as_str(), r.to.as_str()))
+            .collect();
+        let images: HashMap<&str, &str> = query
+            .pages
+            .values()
+            .filter_map(|p| Some((p.title.as_str(), p.original.as_ref()?.source.as_str())))
+            .collect();
+        for title in chunk {
+            // Follow the asked title through its renames to the page that answered.
+            let mut current = title.replace(' ', "_");
+            for _ in 0..3 {
+                match renamed.get(current.as_str()).or_else(|| renamed.get(current.replace('_', " ").as_str())) {
+                    Some(next) => current = (*next).to_owned(),
+                    None => break,
+                }
+            }
+            if let Some(source) = images.get(current.replace('_', " ").as_str()) {
+                found.insert(title.clone(), (*source).to_owned());
             }
         }
     }
     Ok(found)
+}
+
+/// Addresses of wiki files (`File:<name>`), keyed by the asked title.
+async fn wiki_files(
+    downloader: &Downloader,
+    titles: &[String],
+    cancel: &CancellationToken,
+) -> Result<HashMap<String, String>> {
+    #[derive(Deserialize)]
+    struct Response {
+        query: Option<Query>,
+    }
+    #[derive(Deserialize)]
+    struct Query {
+        #[serde(default)]
+        pages: HashMap<String, Page>,
+    }
+    #[derive(Deserialize)]
+    struct Page {
+        title: String,
+        #[serde(default)]
+        imageinfo: Vec<Info>,
+    }
+    #[derive(Deserialize)]
+    struct Info {
+        url: String,
+    }
+    let url = format!(
+        "{WIKI_API}?action=query&format=json&prop=imageinfo&iiprop=url&titles={}",
+        sulfur_download::encode_component(&titles.join("|"))
+    );
+    let response: Response = fetch_json(downloader, &url, cancel).await?;
+    let pages = response.query.map(|q| q.pages).unwrap_or_default();
+    Ok(pages
+        .into_values()
+        .filter_map(|p| Some((p.title, p.imageinfo.into_iter().next()?.url)))
+        .filter(|(title, _)| titles.contains(title))
+        .collect())
 }
 
 async fn fetch_json<T: serde::de::DeserializeOwned>(
@@ -186,8 +319,16 @@ mod tests {
     }
 
     #[test]
+    fn matches_update_names() {
+        assert_eq!(update_key("Caves & Cliffs: Part II"), update_key("Caves & Cliffs Part II"));
+        assert_eq!(update_key("World of Color"), update_key("World of Color Update"));
+        assert_eq!(update_key("The Wild Update"), "wild");
+        assert_ne!(update_key("Caves & Cliffs: Part I"), update_key("Caves & Cliffs Part II"));
+    }
+
+    #[test]
     fn makes_urls_absolute() {
         assert_eq!(absolute("/v2/images/x.jpg"), "https://launchercontent.mojang.com/v2/images/x.jpg");
-        assert_eq!(wiki_title("1.12"), "Java Edition 1.12");
+
     }
 }

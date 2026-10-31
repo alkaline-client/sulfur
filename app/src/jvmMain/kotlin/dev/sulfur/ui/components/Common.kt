@@ -1,6 +1,9 @@
 package dev.sulfur.ui.components
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.height
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,10 +30,15 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
@@ -41,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
@@ -49,15 +58,32 @@ import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import dev.sulfur.data.LocalImages
 import dev.sulfur.data.rememberRemoteImage
+import dev.sulfur.ffi.InstalledVersion
 import dev.sulfur.ffi.LoaderKind
 import dev.sulfur.ffi.VersionKind
 import dev.sulfur.resources.Res
+import dev.sulfur.resources.logo_cleanroom
+import dev.sulfur.resources.logo_fabric
+import dev.sulfur.resources.logo_forge
+import dev.sulfur.resources.logo_legacy_fabric
+import dev.sulfur.resources.logo_minecraft
+import dev.sulfur.resources.logo_minecraft_snapshot
+import dev.sulfur.resources.logo_neoforge
+import dev.sulfur.resources.logo_optifine
+import dev.sulfur.resources.logo_ornithe
+import dev.sulfur.resources.logo_quilt
+import dev.sulfur.resources.logo_rift
+import dev.sulfur.resources.ic_search
+import dev.sulfur.resources.ic_refresh
+import dev.sulfur.resources.ic_close
+import dev.sulfur.resources.action_close
 import dev.sulfur.resources.kind_alpha
 import dev.sulfur.resources.kind_beta
 import dev.sulfur.resources.kind_other
 import dev.sulfur.resources.kind_release
 import dev.sulfur.resources.kind_snapshot
 import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.imageResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import java.text.CompactNumberFormat
@@ -120,6 +146,76 @@ fun PageHeader(
         Text(title, style = MaterialTheme.typography.headlineSmallEmphasized)
         Spacer(Modifier.weight(1f))
         actions()
+    }
+}
+
+/**
+ * The first row of every section of a page with its own search: the search
+ * field takes the free width and the section's actions follow it, so each
+ * section starts the same way.
+ */
+@Composable
+fun SearchToolbar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = { Text(placeholder, maxLines = 1) },
+            leadingIcon = { Icon(painterResource(Res.drawable.ic_search), null) },
+            trailingIcon = if (query.isNotEmpty()) {
+                { IconButton(onClick = { onQueryChange("") }) { Icon(painterResource(Res.drawable.ic_close), stringResource(Res.string.action_close)) } }
+            } else null,
+            singleLine = true,
+            shape = CircleShape,
+            modifier = Modifier.weight(1f),
+        )
+        actions()
+    }
+}
+
+/** A one-line message on a tonal surface, under a section's toolbar. */
+@Composable
+fun Notice(
+    icon: Painter,
+    text: String,
+    container: Color,
+    content: Color,
+    modifier: Modifier = Modifier,
+    iconTint: Color = content,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = container, contentColor = content) {
+        Row(
+            Modifier.heightIn(min = 48.dp).padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, null, tint = iconTint)
+            Spacer(Modifier.width(12.dp))
+            Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            trailing()
+        }
+    }
+}
+
+/** Refresh, turning into a loading indicator of the same size while [loading]. */
+@Composable
+fun RefreshButton(loading: Boolean, description: String, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+        if (loading) {
+            LoadingIndicator(Modifier.size(40.dp))
+        } else {
+            IconButton(onClick = onClick) { Icon(painterResource(Res.drawable.ic_refresh), description) }
+        }
     }
 }
 
@@ -265,6 +361,63 @@ fun loaderName(kind: LoaderKind): String = when (kind) {
     LoaderKind.QUILT -> "Quilt"
     LoaderKind.RIFT -> "Rift"
     LoaderKind.CLEANROOM -> "Cleanroom"
+}
+
+/** An entry of a page's own side list (Settings, version settings): one compact line. */
+@Composable
+fun SideNavItem(label: String, icon: DrawableResource, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val container by animateColorAsState(
+        if (selected) colors.secondaryContainer else colors.secondaryContainer.copy(alpha = 0f),
+        MaterialTheme.motionScheme.defaultEffectsSpec(),
+    )
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = container,
+        contentColor = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().height(44.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(icon), null, Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** An installed version's name, with its loader unless the name already says it ("1.8.9-Forge …"). */
+fun versionLabel(v: InstalledVersion): String {
+    val loader = v.loader?.let(::loaderName) ?: return v.id
+    return if (v.id.contains(loader, ignoreCase = true)) v.id else "${v.id} · $loader"
+}
+
+/** Each project's own logo. */
+fun loaderLogo(kind: LoaderKind): DrawableResource = when (kind) {
+    LoaderKind.FABRIC -> Res.drawable.logo_fabric
+    LoaderKind.FORGE -> Res.drawable.logo_forge
+    LoaderKind.NEO_FORGE -> Res.drawable.logo_neoforge
+    LoaderKind.OPTI_FINE -> Res.drawable.logo_optifine
+    LoaderKind.LEGACY_FABRIC -> Res.drawable.logo_legacy_fabric
+    LoaderKind.ORNITHE -> Res.drawable.logo_ornithe
+    LoaderKind.QUILT -> Res.drawable.logo_quilt
+    LoaderKind.RIFT -> Res.drawable.logo_rift
+    LoaderKind.CLEANROOM -> Res.drawable.logo_cleanroom
+}
+
+/** Minecraft's own window icon: the grass block, or the dirt block of snapshots. */
+fun minecraftLogo(kind: VersionKind = VersionKind.RELEASE): DrawableResource =
+    if (kind == VersionKind.SNAPSHOT) Res.drawable.logo_minecraft_snapshot else Res.drawable.logo_minecraft
+
+/** A product logo, scaled down smoothly and slightly rounded like an app icon. */
+@Composable
+fun Logo(resource: DrawableResource, size: Dp, modifier: Modifier = Modifier, contentDescription: String? = null) {
+    Image(
+        imageResource(resource),
+        contentDescription = contentDescription,
+        filterQuality = FilterQuality.High,
+        modifier = modifier.size(size).clip(RoundedCornerShape(size / 5)),
+    )
 }
 
 fun formatBytes(bytes: Double): String {
