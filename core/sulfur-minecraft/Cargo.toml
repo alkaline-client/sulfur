@@ -1,0 +1,28 @@
+[package]
+name = "sulfur-minecraft"
+description = "Minecraft metadata, installation and launching for Sulfur"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+flate2.workspace = true
+futures-util.workspace = true
+iana-time-zone.workspace = true
+md-5.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tar.workspace = true
+sulfur-core.workspace = true
+sulfur-download.workspace = true
+sys-locale.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["net"] }
+tracing-subscriber.workspace = true

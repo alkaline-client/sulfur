@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Sulfur logo; the source is app/icons/sulfur.svg. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#E2A82A"
+        android:strokeColor="#E2A82A"
+        android:strokeWidth="8"
+        android:strokeLineJoin="round"
+        android:pathData="M50,6 L87.2,27.5 L87.2,72.5 L50,94 L12.8,72.5 L12.8,27.5 Z" />
+    <path
+        android:fillColor="#C98A14"
+        android:strokeColor="#C98A14"
+        android:strokeWidth="8"
+        android:strokeLineJoin="round"
+        android:pathData="M87.2,27.5 L87.2,72.5 L50,94 L50,49 Z" />
+    <path
+        android:fillColor="#F6D063"
+        android:strokeColor="#F6D063"
+        android:strokeWidth="8"
+        android:strokeLineJoin="round"
+        android:pathData="M50,6 L87.2,27.5 L50,49 L12.8,27.5 Z" />
+    <path
+        android:strokeColor="#2E2200"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M64,30 L41.5,30 L33.5,40 L41.5,50 L58.5,50 L66.5,60 L58.5,70 L36,70" />
+</vector>
