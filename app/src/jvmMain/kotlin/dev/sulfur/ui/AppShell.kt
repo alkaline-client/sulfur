@@ -263,7 +263,7 @@ private fun Page(
             label = "page",
         ) { page ->
             when (page) {
-                Destination.Launch -> LaunchScreen(app.launch, app.repository, onBrowseVersions = {
+                Destination.Launch -> LaunchScreen(app.launch, app.repository, app.misc, onBrowseVersions = {
                     onNavigate(Destination.Download)
                 })
                 Destination.Download -> DownloadScreen(app.download, app.mods, app.modpacks, app.repository)

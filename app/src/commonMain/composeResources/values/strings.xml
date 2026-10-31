@@ -383,6 +383,7 @@
     <string name="version_reset">Reset to global settings</string>
     <string name="version_on">On</string>
     <string name="version_off">Off</string>
+    <string name="version_global">Global</string>
     <string name="settings_color_source_seed">Chosen color</string>
     <string name="settings_color_source_wallpaper">Wallpaper</string>
     <string name="settings_color_wallpaper_hint">Colors come from your desktop wallpaper and follow it when it changes.</string>

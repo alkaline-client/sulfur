@@ -35,7 +35,7 @@ class ImageCache(private val repository: SulfurRepository, private val capacity:
         val image = runCatching {
             val path = repository.cachedImage(url)
             withContext(Dispatchers.IO) {
-                Image.makeFromEncoded(File(path).readBytes()).toComposeImageBitmap()
+                decodeScaled(File(path), RemoteMaxSide).toComposeImageBitmap()
             }
         }.getOrNull() ?: return null
         synchronized(decoded) { decoded[url] = image }
@@ -55,6 +55,9 @@ fun rememberRemoteImage(url: String?, images: ImageCache?): State<ImageBitmap?> 
 /** Longest side of a decoded background picture; larger photos are scaled down to save memory. */
 private const val BackgroundMaxSide = 1920
 
+/** Longest side of a decoded remote image; banners never show larger, and big ones cost memory and upload time. */
+private const val RemoteMaxSide = 1280
+
 /**
  * The background picture at [path], scaled down and blurred once here rather
  * than on every frame. Null without a path or when the file cannot be read.
@@ -62,7 +65,7 @@ private const val BackgroundMaxSide = 1920
 @Composable
 fun rememberBackgroundImage(path: String?, blurRadius: Float): State<ImageBitmap?> {
     val base by produceState<Image?>(initialValue = null, path) {
-        value = path?.let { withContext(Dispatchers.IO) { runCatching { decodeScaled(File(it)) }.getOrNull() } }
+        value = path?.let { withContext(Dispatchers.IO) { runCatching { decodeScaled(File(it), BackgroundMaxSide) }.getOrNull() } }
     }
     return produceState<ImageBitmap?>(initialValue = null, base, blurRadius) {
         val image = base ?: run { value = null; return@produceState }
@@ -70,9 +73,9 @@ fun rememberBackgroundImage(path: String?, blurRadius: Float): State<ImageBitmap
     }
 }
 
-private fun decodeScaled(file: File): Image {
+private fun decodeScaled(file: File, maxSide: Int): Image {
     val image = Image.makeFromEncoded(file.readBytes())
-    val scale = BackgroundMaxSide.toFloat() / maxOf(image.width, image.height)
+    val scale = maxSide.toFloat() / maxOf(image.width, image.height)
     if (scale >= 1f) return image
     val (w, h) = (image.width * scale).toInt().coerceAtLeast(1) to (image.height * scale).toInt().coerceAtLeast(1)
     val surface = Surface.makeRasterN32Premul(w, h)

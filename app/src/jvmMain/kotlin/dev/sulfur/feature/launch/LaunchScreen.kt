@@ -7,11 +7,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -28,7 +26,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -38,7 +35,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -54,11 +50,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -69,7 +63,10 @@ import androidx.compose.ui.window.DialogProperties
 import org.jetbrains.compose.resources.DrawableResource
 import dev.sulfur.data.SulfurRepository
 import dev.sulfur.ffi.InstalledVersion
-import dev.sulfur.ffi.Isolation
+import dev.sulfur.ffi.LaunchColumn
+import dev.sulfur.feature.misc.MiscViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import dev.sulfur.resources.Res
 import dev.sulfur.resources.action_browse_versions
 import dev.sulfur.resources.action_choose_version
@@ -78,44 +75,29 @@ import dev.sulfur.resources.action_play
 import dev.sulfur.resources.action_close
 import dev.sulfur.resources.action_stop
 import dev.sulfur.resources.ic_arrow_drop_down
-import dev.sulfur.resources.ic_coffee
 import dev.sulfur.resources.ic_download
-import dev.sulfur.resources.ic_extension
-import dev.sulfur.resources.ic_folder_open
-import dev.sulfur.resources.ic_layers
 import dev.sulfur.resources.ic_person
 import dev.sulfur.resources.ic_play_arrow
 import dev.sulfur.resources.ic_stop
 import dev.sulfur.resources.ic_terminal
 import dev.sulfur.resources.ic_tune
-import dev.sulfur.resources.isolation_default
-import dev.sulfur.resources.isolation_isolated
-import dev.sulfur.resources.isolation_isolated_hint
-import dev.sulfur.resources.isolation_shared
-import dev.sulfur.resources.isolation_shared_hint
 import dev.sulfur.resources.launch_empty_hint
 import dev.sulfur.resources.launch_empty_title
 import dev.sulfur.resources.launch_exited
 import dev.sulfur.resources.launch_exited_code
-import dev.sulfur.resources.launch_game_folder
-import dev.sulfur.resources.launch_java
 import dev.sulfur.resources.launch_log
 import dev.sulfur.resources.launch_log_empty
 import dev.sulfur.resources.launch_offline_hint
 import dev.sulfur.resources.launch_offline_name
 import dev.sulfur.resources.launch_running
 import dev.sulfur.resources.launch_running_pid
-import dev.sulfur.resources.launch_saves_mods
 import dev.sulfur.resources.launch_starting
 import dev.sulfur.resources.launch_version_settings
 import dev.sulfur.ui.components.CardSpacing
-import dev.sulfur.ui.components.ConnectedChoice
 import dev.sulfur.ui.components.PagePadding
 import dev.sulfur.ui.components.SectionCard
 import dev.sulfur.ui.components.ShapeIcon
 import dev.sulfur.ui.components.loaderName
-import dev.sulfur.util.openFolder
-import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -123,8 +105,10 @@ import org.jetbrains.compose.resources.stringResource
 fun LaunchScreen(
     viewModel: LaunchViewModel,
     repository: SulfurRepository,
+    misc: MiscViewModel,
     onBrowseVersions: () -> Unit,
 ) {
+    val runtimes by misc.java.collectAsState()
     val installed by repository.installed.collectAsState()
     val selectedId by viewModel.selected.collectAsState()
     val state by viewModel.state.collectAsState()
@@ -132,48 +116,57 @@ fun LaunchScreen(
     val account by repository.currentAccount.collectAsState()
     val selected = installed.firstOrNull { it.id == selectedId }
     var showOutput by remember { mutableStateOf(false) }
-    var showVersionSettings by remember { mutableStateOf(false) }
+    val showVersionSettings by viewModel.versionSettingsOpen.collectAsState()
 
     if (installed.isEmpty()) {
         EmptyState(onBrowseVersions)
         return
     }
-    // Only what starting the game needs, at the bottom left: who plays, Play
-    // with the version, and the version's settings. The rest of the page is
-    // kept free for later features.
-    Box(Modifier.fillMaxSize().padding(PagePadding), contentAlignment = Alignment.BottomStart) {
-        Column(Modifier.widthIn(max = LaunchColumnWidth), verticalArrangement = Arrangement.spacedBy(CardSpacing)) {
-            AccountCard(repository)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PlayButton(
-                    installed = installed,
-                    selected = selected,
-                    state = state,
-                    canPlay = account != null,
-                    onSelect = viewModel::select,
-                    onPlay = viewModel::play,
-                    onStop = viewModel::stop,
-                )
-                val height = SplitButtonDefaults.LargeContainerHeight
-                FilledTonalIconButton(
-                    onClick = { showVersionSettings = true },
-                    enabled = selected != null,
-                    shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.size(height),
-                ) {
-                    Icon(
-                        painterResource(Res.drawable.ic_tune),
-                        stringResource(Res.string.launch_version_settings),
-                        Modifier.size(ButtonDefaults.iconSizeFor(height)),
+    val column by remember { repository.settings.map { it.launchColumn }.distinctUntilChanged() }
+        .collectAsState(repository.settings.value.launchColumn)
+    // The Play column (who plays, Play with the version, its settings) sits
+    // at the bottom of one side; the cards the user arranged fill the other.
+    Row(Modifier.fillMaxSize().padding(PagePadding), horizontalArrangement = Arrangement.spacedBy(PagePadding)) {
+        val play = @Composable {
+            Column(
+                Modifier.width(LaunchColumnWidth).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(CardSpacing, Alignment.Bottom),
+            ) {
+                AccountCard(repository)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PlayButton(
+                        installed = installed,
+                        selected = selected,
+                        state = state,
+                        canPlay = account != null,
+                        onSelect = viewModel::select,
+                        onPlay = viewModel::play,
+                        onStop = viewModel::stop,
                     )
+                    val height = SplitButtonDefaults.LargeContainerHeight
+                    FilledTonalIconButton(
+                        onClick = { viewModel.versionSettingsOpen.value = true },
+                        enabled = selected != null,
+                        shapes = IconButtonDefaults.shapes(),
+                        modifier = Modifier.size(height),
+                    ) {
+                        Icon(
+                            painterResource(Res.drawable.ic_tune),
+                            stringResource(Res.string.launch_version_settings),
+                            Modifier.size(ButtonDefaults.iconSizeFor(height)),
+                        )
+                    }
                 }
+                StatusBanner(state, onDismiss = viewModel::dismiss, onShowOutput = { showOutput = true })
             }
-            StatusBanner(state, onDismiss = viewModel::dismiss, onShowOutput = { showOutput = true })
         }
+        if (column == LaunchColumn.LEFT) play()
+        LaunchCards(repository, viewModel.customizing, Modifier.weight(1f).fillMaxHeight())
+        if (column == LaunchColumn.RIGHT) play()
     }
     if (showOutput) OutputDialog(logs, onDismiss = { showOutput = false })
     if (showVersionSettings && selected != null) {
-        VersionSettingsDialog(selected, repository, onDismiss = { showVersionSettings = false })
+        VersionSettingsDialog(selected, repository, runtimes.orEmpty(), onDismiss = { viewModel.versionSettingsOpen.value = false })
     }
 }
 
@@ -272,31 +265,6 @@ private fun ButtonLabel(icon: DrawableResource, action: String, version: String,
     }
 }
 
-/** Loader, Java and folder of the selected version. */
-@Composable
-private fun VersionFacts(version: InstalledVersion) {
-    val scope = rememberCoroutineScope()
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        version.loader?.let { loader ->
-            AssistChip(
-                onClick = {},
-                label = { Text("${loaderName(loader)} · ${version.gameVersion}") },
-                leadingIcon = { Icon(painterResource(Res.drawable.ic_extension), null, Modifier.size(18.dp)) },
-            )
-        }
-        AssistChip(
-            onClick = {},
-            label = { Text(stringResource(Res.string.launch_java, version.javaMajor.toString())) },
-            leadingIcon = { Icon(painterResource(Res.drawable.ic_coffee), null, Modifier.size(18.dp)) },
-        )
-        AssistChip(
-            onClick = { scope.launch { openFolder(version.runDir) } },
-            label = { Text(stringResource(Res.string.launch_game_folder)) },
-            leadingIcon = { Icon(painterResource(Res.drawable.ic_folder_open), null, Modifier.size(18.dp)) },
-        )
-    }
-}
-
 @Composable
 private fun StatusBanner(state: GameState, onDismiss: () -> Unit, onShowOutput: () -> Unit) {
     val motion = MaterialTheme.motionScheme
@@ -350,7 +318,8 @@ private fun StatusRow(
             if (loading) {
                 ContainedLoadingIndicator(Modifier.size(32.dp))
             } else if (!error) {
-                LoadingIndicator(Modifier.size(32.dp))
+                Icon(painterResource(Res.drawable.ic_play_arrow), null, Modifier.size(32.dp).padding(4.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
             Spacer(Modifier.width(12.dp))
             Text(
@@ -362,44 +331,6 @@ private fun StatusRow(
             action()
         }
     }
-}
-
-/** Settings of one version: its loader, Java and folder, and where it keeps saves and mods. */
-@Composable
-private fun VersionSettingsDialog(version: InstalledVersion, repository: SulfurRepository, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(painterResource(Res.drawable.ic_layers), null) },
-        title = { Text(version.id) },
-        text = {
-            Column(Modifier.widthIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                VersionFacts(version)
-                Text(stringResource(Res.string.launch_saves_mods), style = MaterialTheme.typography.labelLarge)
-                // Follow the global default, or override for this version.
-                val current = if (version.isolationOverridden) version.isolation else null
-                ConnectedChoice(
-                    options = listOf(null, Isolation.ISOLATED, Isolation.SHARED),
-                    selected = current,
-                    label = {
-                        stringResource(
-                            when (it) {
-                                null -> Res.string.isolation_default
-                                Isolation.ISOLATED -> Res.string.isolation_isolated
-                                Isolation.SHARED -> Res.string.isolation_shared
-                            }
-                        )
-                    },
-                    onSelect = { repository.setVersionIsolation(version.id, it) },
-                )
-                Text(
-                    stringResource(if (version.isolation == Isolation.ISOLATED) Res.string.isolation_isolated_hint else Res.string.isolation_shared_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_close)) } },
-    )
 }
 
 /** The game's recent output. */

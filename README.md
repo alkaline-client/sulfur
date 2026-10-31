@@ -34,6 +34,13 @@ with Google's **Material 3 Expressive** components.
   the pack's files and its overrides, in an isolated folder.
 - **Java taken care of.** Sulfur picks the right installed Java per version
   and downloads the right one (Eclipse Temurin) when none fits.
+- **Settings per version.** Any version can have its own Java, memory, window,
+  JVM and game arguments, garbage collector, wrapper command (e.g.
+  `gamemoderun`), pre-launch command, environment variables and a server to
+  join on start; anything left empty follows the global settings.
+- **Garbage collector presets.** G1 tuned as the official launcher does,
+  generational ZGC, Shenandoah or Parallel, with flags the chosen Java lacks
+  left out.
 - **Log4Shell patched** for Minecraft 1.7–1.18.0 with Mojang's fixed logging
   configuration and JVM arguments (can be turned off).
 - **Every update at a glance.** The Download page shows each major update as a
@@ -52,8 +59,12 @@ with Google's **Material 3 Expressive** components.
   Settings → Appearance.
 - **Material 3 Expressive UI.** Page entries in a top bar or a wide
   navigation rail, split and connected button groups, wavy progress, morphing
-  loading indicators, expressive shapes and motion, dynamic color from a seed,
-  Google Sans Flex, and an optional background picture with opacity and blur.
+  loading indicators, expressive shapes and motion, dynamic color from a seed
+  color, the desktop wallpaper or the background picture, Google Sans Flex,
+  and an optional background picture with opacity and blur.
+- **A Launch page of your own.** Put the Play column on the left or right
+  and add cards beside it: Minecraft news, the latest versions, notes, links
+  or a Markdown page from a file or the web.
 - **Targets Windows 10+, macOS and Linux (x64 and arm64).** Tested so far on
   Linux arm64, where the installer swaps in LWJGL's official arm64 natives so
   current Minecraft runs natively.

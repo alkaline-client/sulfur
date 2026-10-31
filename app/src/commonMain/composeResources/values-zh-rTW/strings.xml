@@ -351,6 +351,7 @@
     <string name="version_reset">恢復為全域設定</string>
     <string name="version_on">開啟</string>
     <string name="version_off">關閉</string>
+    <string name="version_global">全域</string>
     <string name="settings_color_source_seed">所選顏色</string>
     <string name="settings_color_source_wallpaper">桌布</string>
     <string name="settings_color_wallpaper_hint">顏色取自桌面桌布，並會隨桌布變化。</string>

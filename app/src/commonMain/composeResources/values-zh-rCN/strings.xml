@@ -351,6 +351,7 @@
     <string name="version_reset">恢复为全局设置</string>
     <string name="version_on">开启</string>
     <string name="version_off">关闭</string>
+    <string name="version_global">全局</string>
     <string name="settings_color_source_seed">所选颜色</string>
     <string name="settings_color_source_wallpaper">壁纸</string>
     <string name="settings_color_wallpaper_hint">颜色取自桌面壁纸，并会随壁纸变化。</string>

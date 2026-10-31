@@ -7,7 +7,10 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import dev.sulfur.AppContainer
 import dev.sulfur.feature.download.DownloadSection
+import dev.sulfur.ffi.LaunchColumn
+import dev.sulfur.ffi.LaunchWidget
 import dev.sulfur.ffi.NavigationPosition
+import dev.sulfur.ffi.WidgetKind
 import dev.sulfur.ffi.SulfurCore
 import dev.sulfur.ffi.ThemeMode
 import dev.sulfur.ui.AppShell
@@ -51,6 +54,19 @@ private suspend fun render(args: Array<String>) {
 
     class Shot(val name: String, val page: Destination, val theme: ThemeMode, val after: () -> Unit = {}, val setup: () -> Unit = {})
     val navigation = app.repository.settings.value.navigation
+    val launchPage = app.repository.settings.value.let { it.launchColumn to it.launchWidgets }
+    // One card of each kind; the Markdown card reads a page written next to the shots.
+    val sampleCards = File(out, "sample.md").apply {
+        writeText("# Server rules\n\nBe **kind**, no griefing, and read the [wiki](https://minecraft.wiki).\n\n- Survival on `play.example.com`\n- Backups every night\n\n> Have fun!\n")
+    }.let { page ->
+        listOf(
+            LaunchWidget(WidgetKind.NEWS, "", ""),
+            LaunchWidget(WidgetKind.VERSIONS, "", ""),
+            LaunchWidget(WidgetKind.NOTE, "Today", "Finish the redstone door, then visit the nether fortress."),
+            LaunchWidget(WidgetKind.LINKS, "", "Minecraft Wiki | https://minecraft.wiki\nModrinth | https://modrinth.com"),
+            LaunchWidget(WidgetKind.MARKDOWN, "", page.absolutePath),
+        )
+    }
     // Shots are in English unless they say otherwise.
     val language = "en"
     app.repository.updateSettings { it.copy(language = language) }
@@ -87,6 +103,29 @@ private suspend fun render(args: Array<String>) {
         Shot("download-search-zh-cn", Destination.Download, ThemeMode.LIGHT) {
             app.repository.updateSettings { it.copy(language = "zh-CN") }
             app.download.setQuery("洞穴")
+        } +
+        Shot("launch-cards-light", Destination.Launch, ThemeMode.LIGHT) {
+            app.repository.updateSettings { it.copy(launchWidgets = sampleCards) }
+        } +
+        Shot("launch-cards-right-dark", Destination.Launch, ThemeMode.DARK) {
+            app.repository.updateSettings { it.copy(launchWidgets = sampleCards, launchColumn = LaunchColumn.RIGHT) }
+        } +
+        Shot("launch-cards-text-light", Destination.Launch, ThemeMode.LIGHT) {
+            app.repository.updateSettings { it.copy(launchWidgets = sampleCards.reversed()) }
+        } +
+        Shot("launch-customize-light", Destination.Launch, ThemeMode.LIGHT) {
+            app.repository.updateSettings { it.copy(launchWidgets = sampleCards) }
+            app.launch.customizing.value = true
+        } +
+        Shot("launch-version-general-light", Destination.Launch, ThemeMode.LIGHT) {
+            app.launch.versionSettingsOpen.value = true
+        } +
+        Shot("launch-version-general-zh-tw", Destination.Launch, ThemeMode.LIGHT) {
+            app.repository.updateSettings { it.copy(language = "zh-TW") }
+            app.launch.versionSettingsOpen.value = true
+        } +
+        Shot("launch-cards-zh-cn", Destination.Launch, ThemeMode.LIGHT) {
+            app.repository.updateSettings { it.copy(launchWidgets = sampleCards, language = "zh-CN") }
         } +
         inLanguage("launch-zh-cn", Destination.Launch, "zh-CN") +
         inLanguage("download-zh-cn", Destination.Download, "zh-CN") +
@@ -141,7 +180,11 @@ private suspend fun render(args: Array<String>) {
         app.download.showSection(DownloadSection.Game)
         app.download.setQuery("")
         app.modpacks.close()
-        app.repository.updateSettings { it.copy(navigation = navigation, language = language) }
+        app.launch.customizing.value = false
+        app.launch.versionSettingsOpen.value = false
+        app.repository.updateSettings {
+            it.copy(navigation = navigation, language = language, launchColumn = launchPage.first, launchWidgets = launchPage.second)
+        }
     }
     app.close()
 }

@@ -15,6 +15,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldLabelPosition
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +44,7 @@ import dev.sulfur.resources.gc_parallel_hint
 import dev.sulfur.resources.gc_shenandoah_hint
 import dev.sulfur.resources.gc_zgc_hint
 import dev.sulfur.resources.ic_coffee
-import dev.sulfur.resources.isolation_default
+import dev.sulfur.resources.version_global
 import dev.sulfur.resources.settings_env
 import dev.sulfur.resources.settings_env_hint
 import dev.sulfur.resources.settings_gc
@@ -84,7 +94,7 @@ internal fun GcChoice(selected: GarbageCollector?, inherited: GarbageCollector?,
     ConnectedChoice(
         options = options,
         selected = selected,
-        label = { gc -> gc?.let { gcLabel(it) } ?: stringResource(Res.string.isolation_default) },
+        label = { gc -> gc?.let { gcLabel(it) } ?: stringResource(Res.string.version_global) },
         onSelect = onSelect,
         fill = false,
     )
@@ -102,18 +112,56 @@ internal fun OptionField(
     singleLine: Boolean = true,
     monospace: Boolean = false,
 ) {
-    OutlinedTextField(
+    SettingTextField(
         value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        placeholder = placeholder?.takeIf { it.isNotBlank() }?.let { { Text(it, maxLines = 1) } },
-        supportingText = hint?.let { { Text(it) } },
-        singleLine = singleLine,
-        minLines = if (singleLine) 1 else 3,
-        maxLines = if (singleLine) 1 else 8,
+        onChange = onChange,
+        label = label,
+        placeholder = placeholder,
+        hint = hint,
+        lineLimits = if (singleLine) TextFieldLineLimits.SingleLine else TextFieldLineLimits.MultiLine(3, 8),
         textStyle = if (monospace) MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
         else MaterialTheme.typography.bodyLarge,
         modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/**
+ * A text field bound to a setting. With a [placeholder] the label stays small
+ * above an empty field, so what applies when it is empty shows without focus.
+ */
+@Composable
+private fun SettingTextField(
+    value: String,
+    onChange: (String) -> Unit,
+    label: String,
+    placeholder: String?,
+    modifier: Modifier,
+    hint: String? = null,
+    lineLimits: TextFieldLineLimits = TextFieldLineLimits.SingleLine,
+    textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    inputTransformation: InputTransformation? = null,
+) {
+    val state = rememberTextFieldState(value)
+    val current by rememberUpdatedState(value)
+    val report by rememberUpdatedState(onChange)
+    // Outside changes (a reset, another window) replace the text; typing reports it.
+    LaunchedEffect(value) {
+        if (state.text.toString() != value) state.setTextAndPlaceCursorAtEnd(value)
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.text.toString() }.collect { if (it != current) report(it) }
+    }
+    val shown = placeholder?.takeIf { it.isNotBlank() }
+    OutlinedTextField(
+        state = state,
+        label = { Text(label) },
+        labelPosition = TextFieldLabelPosition.Attached(alwaysMinimize = shown != null),
+        placeholder = shown?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
+        supportingText = hint?.let { { Text(it) } },
+        lineLimits = lineLimits,
+        textStyle = textStyle,
+        inputTransformation = inputTransformation,
+        modifier = modifier,
     )
 }
 
@@ -207,14 +255,19 @@ internal fun NumberField(label: String, value: UInt, modifier: Modifier, onChang
 /** A number that may be unset (empty); [placeholder] shows what applies then. */
 @Composable
 internal fun OptionalNumberField(label: String, value: UInt?, placeholder: String, modifier: Modifier, onChange: (UInt?) -> Unit) {
-    OutlinedTextField(
+    SettingTextField(
         value = value?.toString().orEmpty(),
-        onValueChange = { text -> onChange(text.filter(Char::isDigit).take(6).toUIntOrNull()) },
-        label = { Text(label) },
-        placeholder = { Text(placeholder, maxLines = 1) },
-        singleLine = true,
+        onChange = { text -> onChange(text.toUIntOrNull()) },
+        label = label,
+        placeholder = placeholder,
         modifier = modifier,
+        inputTransformation = DigitsOnly,
     )
+}
+
+/** Up to six digits. */
+private val DigitsOnly = InputTransformation {
+    if (length > 6 || !asCharSequence().all(Char::isDigit)) revertAllChanges()
 }
 
 @Composable

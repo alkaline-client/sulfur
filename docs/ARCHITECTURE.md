@@ -125,14 +125,76 @@ OptiFine and a fixed list for Rift.
 
 `java::discover_in` probes the usual install locations plus runtimes Sulfur
 downloaded into `<data>/java/<major>-<arch>/`. For each launch (and each
-loader installer) `State::find_java` takes, in order: the Java set in
-Settings; an installed runtime of exactly the needed major version, or a
+loader installer) `State::find_java` takes, in order: the Java set for the
+version, else the one set in Settings; an installed runtime of exactly the needed major version, or a
 newer one for games needing Java 16+ (older games and their loaders often
 break on newer Java); a fresh download of that version when *Download Java
 automatically* is on (Eclipse Temurin via the Adoptium API, Azul Zulu where
 Temurin has no build, e.g. Java 8 on Apple silicon); finally the closest newer
 runtime. Downloads run as install tasks named `Java <major>`, so their progress
 shows with the game installs.
+
+### Launch settings
+
+`GameSettings` holds the global values and `version_settings`, one
+`VersionSettings` of optional overrides per version id (empty overrides are
+dropped). `GameSettings::launch_settings(id)` merges them into a
+`LaunchSettings`; blank text follows the global value. From that, `launch.rs`
+builds the command:
+
+- `-Xms`/`-Xmx`, then `gc_args(gc, java_major)`, then the user's JVM
+  arguments, so the user can still override any GC flag. G1 uses the official
+  launcher's tuning; ZGC adds `-XX:+ZGenerational` on Java 21–22 (the default
+  from 23) and needs Java 17+; Shenandoah needs Java 12+. A collector the Java
+  lacks falls back to the JVM's own choice.
+- Extra game arguments, and a server to join: through Quick Play when the
+  version supports it (`quickPlayMultiplayer`), otherwise `--server`/`--port`.
+- A wrapper command (`gamemoderun`, `prime-run`, `mangohud`…) goes in front of
+  `java`; environment variables (`KEY=value` lines) are added to the process.
+- A pre-launch command runs first in the game folder through `sh -c` (or
+  `cmd /C`) with `INST_NAME`, `INST_ID`, `INST_DIR`, `INST_MC_DIR` and
+  `INST_JAVA` set (the names MultiMC and Prism use); a failure stops the launch.
+
+Arguments are split like a shell does with quotes (`split_args`), so
+`-Dname="two words"` stays one argument.
+
+### Theme color and wallpaper
+
+The theme's seed is the picked color, or one sampled from the desktop
+wallpaper or the background picture (`ThemeColors`): the picture is scaled to
+128 px and run through Material's Celebi quantizer and scoring, as Android
+does for wallpaper colors. The wallpaper is looked up again when the window
+gains focus, at most every five seconds.
+
+`sulfur_core::wallpaper::detect` finds the wallpaper per platform:
+
+- **Windows:** `HKCU\Control Panel\Desktop\WallPaper`, else the
+  `TranscodedWallpaper` copy, or the solid `Colors\Background` color.
+- **macOS:** `NSWorkspace.desktopImageURLForScreen` through JXA, else the
+  Dock's `desktoppicture.db`.
+- **Linux:** probes ordered by `XDG_CURRENT_DESKTOP`: COSMIC's background
+  state, KDE Plasma's `plasma-org.kde.plasma.desktop-appletsrc`, Xfce's
+  `xfce4-desktop.xml`, GNOME/Cinnamon/MATE/Budgie through `gsettings` (with
+  the dark-style picture and XML slideshows), LXQt and LXDE config, then
+  wallpaper programs used by Hyprland, Niri, Sway and others: hyprpaper,
+  swww/awww, wpaperd, swaybg, wbg and xwallpaper (from their command lines in
+  `/proc`), waypaper, feh and nitrogen.
+
+Pictures Skia cannot decode (HEIC, JPEG XL, AVIF, TIFF, SVG) are converted to
+PNG in the cache with whichever of `sips`, `magick`, `convert`, `djxl`,
+`rsvg-convert` or Quick Look is there. Every external command has a three-second
+time limit.
+
+### Launch page
+
+`LaunchPageSettings` stores the Play column's side and a list of
+`LaunchWidget`s (kind, title, content). Cards: Minecraft news (the official
+launcher's feed, `launchercontent.mojang.com/v2/news.json`, Java entries only),
+the latest release and snapshot with an Install button, a note, links
+(`label | url` lines) and a Markdown page read by `SulfurCore::read_document`
+from a file or an https address (at most 512 KiB). `ui/components/Markdown.kt`
+renders the common subset: headings, paragraphs, lists, quotes, code, rules,
+bold, italic, inline code and links.
 
 ### Log4Shell
 

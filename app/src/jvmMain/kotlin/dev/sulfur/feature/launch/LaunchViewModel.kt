@@ -43,6 +43,12 @@ class LaunchViewModel(
         settings.selectedVersion?.takeIf { id -> installed.any { it.id == id } } ?: installed.firstOrNull()?.id
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** Whether the selected version's settings dialog is open. */
+    val versionSettingsOpen = MutableStateFlow(false)
+
+    /** Whether the Launch page's cards are being arranged. */
+    val customizing = MutableStateFlow(false)
+
     fun select(versionId: String) {
         repository.updateSettings { it.copy(selectedVersion = versionId) }
     }

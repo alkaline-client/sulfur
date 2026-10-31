@@ -68,7 +68,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
@@ -190,18 +192,23 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
     val ui by viewModel.ui.collectAsState()
     val installs by repository.installs.collectAsState()
     val installed by repository.installed.collectAsState()
-    val state = InstallState(installed.map { it.id }.toSet(), installs.associateBy { it.versionId })
+    val state = remember(installed, installs) { InstallState(installed.map { it.id }.toSet(), installs.associateBy { it.versionId }) }
     val open = ui.openGroup
     // Keeps the floating card's content while it animates away.
     var shownGroup by remember { mutableStateOf<VersionGroup?>(null) }
     ui.groups.firstOrNull { it.key == open }?.let { shownGroup = it }
 
-    val blur by animateDpAsState(if (open != null) 14.dp else 0.dp, MaterialTheme.motionScheme.defaultEffectsSpec())
+    // Read in the layer below, so the animation redraws the page instead of recomposing it.
+    val blur = animateDpAsState(if (open != null) 14.dp else 0.dp, MaterialTheme.motionScheme.defaultEffectsSpec())
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
             Column(
-                Modifier.fillMaxSize().blur(blur).padding(horizontal = PagePadding, vertical = 12.dp),
+                Modifier.fillMaxSize().graphicsLayer {
+                    val radius = blur.value.toPx()
+                    renderEffect = if (radius > 0.5f) BlurEffect(radius, radius, TileMode.Clamp) else null
+                    clip = radius > 0.5f
+                }.padding(horizontal = PagePadding, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(CardSpacing),
             ) {
                 PageHeader(stringResource(Res.string.download_title)) {

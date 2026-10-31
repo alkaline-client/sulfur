@@ -45,8 +45,16 @@ not in the repository; builds without one show sign-in as unavailable.
    ./gradlew :app:run -Psulfur.msaClientId=<application id>
    ```
 
-   or set `SULFUR_MSA_CLIENT_ID` when building. The same variable at run time
-   overrides the built-in ID, which is handy while testing.
+   or set `SULFUR_MSA_CLIENT_ID` when building, or put it in
+   `local.properties` at the repository root, which Git ignores:
+
+   ```properties
+   sulfur.msaClientId=<application id>
+   ```
+
+   The Gradle property wins over the variable, which wins over
+   `local.properties`. The same variable at run time overrides the built-in
+   ID, which is handy while testing.
 
 ## Errors players may see
 

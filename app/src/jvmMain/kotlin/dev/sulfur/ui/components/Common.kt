@@ -183,20 +183,20 @@ fun ShapeIcon(
     content: Color = MaterialTheme.colorScheme.onSecondaryContainer,
     rotating: Boolean = false,
 ) {
+    // The angle is read only while drawing, so turning redraws the shape
+    // without recomposing it every frame.
     val rotation = if (rotating) {
-        val transition = rememberInfiniteTransition()
-        val angle by transition.animateFloat(
+        rememberInfiniteTransition().animateFloat(
             initialValue = 0f,
             targetValue = 360f,
             animationSpec = infiniteRepeatable(tween(12_000, easing = LinearEasing), RepeatMode.Restart),
         )
-        angle
-    } else 0f
+    } else null
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Box(
             Modifier
                 .matchParentSize()
-                .graphicsLayer { rotationZ = rotation }
+                .graphicsLayer { rotationZ = rotation?.value ?: 0f }
                 .clip(shape.toShape())
                 .background(container)
         )

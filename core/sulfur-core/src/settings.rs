@@ -317,13 +317,24 @@ pub struct ModSettings {
 }
 
 /// What the Launch page shows next to the Play column.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LaunchPageSettings {
     /// Which side the account card and Play button sit on.
     pub column: LaunchColumn,
     /// Cards on the rest of the page, top to bottom.
     pub widgets: Vec<LaunchWidget>,
+}
+
+/// A new page shows the news, so the space beside Play is not empty; once
+/// saved, an emptied page stays empty.
+impl Default for LaunchPageSettings {
+    fn default() -> Self {
+        Self {
+            column: LaunchColumn::default(),
+            widgets: vec![LaunchWidget { kind: WidgetKind::News, ..Default::default() }],
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
