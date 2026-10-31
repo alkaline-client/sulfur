@@ -352,6 +352,9 @@
     <string name="version_on">开启</string>
     <string name="version_off">关闭</string>
     <string name="version_global">全局</string>
+    <string name="version_memory">内存</string>
+    <string name="version_server_address">服务器地址</string>
+    <string name="action_back">返回</string>
     <string name="settings_color_source_seed">所选颜色</string>
     <string name="settings_color_source_wallpaper">壁纸</string>
     <string name="settings_color_wallpaper_hint">颜色取自桌面壁纸，并会随壁纸变化。</string>

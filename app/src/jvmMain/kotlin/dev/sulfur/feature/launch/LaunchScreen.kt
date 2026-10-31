@@ -6,6 +6,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -124,50 +126,65 @@ fun LaunchScreen(
     }
     val column by remember { repository.settings.map { it.launchColumn }.distinctUntilChanged() }
         .collectAsState(repository.settings.value.launchColumn)
-    // The Play column (who plays, Play with the version, its settings) sits
-    // at the bottom of one side; the cards the user arranged fill the other.
-    Row(Modifier.fillMaxSize().padding(PagePadding), horizontalArrangement = Arrangement.spacedBy(PagePadding)) {
-        val play = @Composable {
-            Column(
-                Modifier.width(LaunchColumnWidth).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(CardSpacing, Alignment.Bottom),
-            ) {
-                AccountCard(repository)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlayButton(
-                        installed = installed,
-                        selected = selected,
-                        state = state,
-                        canPlay = account != null,
-                        onSelect = viewModel::select,
-                        onPlay = viewModel::play,
-                        onStop = viewModel::stop,
-                    )
-                    val height = SplitButtonDefaults.LargeContainerHeight
-                    FilledTonalIconButton(
-                        onClick = { viewModel.versionSettingsOpen.value = true },
-                        enabled = selected != null,
-                        shapes = IconButtonDefaults.shapes(),
-                        modifier = Modifier.size(height),
-                    ) {
-                        Icon(
-                            painterResource(Res.drawable.ic_tune),
-                            stringResource(Res.string.launch_version_settings),
-                            Modifier.size(ButtonDefaults.iconSizeFor(height)),
-                        )
-                    }
-                }
-                StatusBanner(state, onDismiss = viewModel::dismiss, onShowOutput = { showOutput = true })
-            }
+    // The version's settings open as a page of their own in place of the
+    // launch layout; the key keeps a version's edits from replaying the move.
+    val motion = MaterialTheme.motionScheme
+    AnimatedContent(
+        targetState = if (showVersionSettings) selected else null,
+        contentKey = { it?.id },
+        transitionSpec = {
+            val direction = if (targetState != null) 1 else -1
+            (fadeIn(motion.defaultEffectsSpec()) + slideInHorizontally(motion.defaultSpatialSpec()) { direction * it / 10 }) togetherWith
+                (fadeOut(motion.fastEffectsSpec()) + slideOutHorizontally(motion.fastSpatialSpec()) { -direction * it / 20 })
+        },
+        label = "launch-page",
+    ) { version ->
+        if (version != null) {
+            VersionSettingsPage(version, repository, runtimes.orEmpty(), onBack = { viewModel.versionSettingsOpen.value = false })
+            return@AnimatedContent
         }
-        if (column == LaunchColumn.LEFT) play()
-        LaunchCards(repository, viewModel.customizing, Modifier.weight(1f).fillMaxHeight())
-        if (column == LaunchColumn.RIGHT) play()
+        // The Play column (who plays, Play with the version, its settings) sits
+        // at the bottom of one side; the cards the user arranged fill the other.
+        Row(Modifier.fillMaxSize().padding(PagePadding), horizontalArrangement = Arrangement.spacedBy(PagePadding)) {
+            val play = @Composable {
+                Column(
+                    Modifier.width(LaunchColumnWidth).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(CardSpacing, Alignment.Bottom),
+                ) {
+                    AccountCard(repository)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlayButton(
+                            installed = installed,
+                            selected = selected,
+                            state = state,
+                            canPlay = account != null,
+                            onSelect = viewModel::select,
+                            onPlay = viewModel::play,
+                            onStop = viewModel::stop,
+                        )
+                        val height = SplitButtonDefaults.LargeContainerHeight
+                        FilledTonalIconButton(
+                            onClick = { viewModel.versionSettingsOpen.value = true },
+                            enabled = selected != null,
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier.size(height),
+                        ) {
+                            Icon(
+                                painterResource(Res.drawable.ic_tune),
+                                stringResource(Res.string.launch_version_settings),
+                                Modifier.size(ButtonDefaults.iconSizeFor(height)),
+                            )
+                        }
+                    }
+                    StatusBanner(state, onDismiss = viewModel::dismiss, onShowOutput = { showOutput = true })
+                }
+            }
+            if (column == LaunchColumn.LEFT) play()
+            LaunchCards(repository, viewModel.customizing, Modifier.weight(1f).fillMaxHeight())
+            if (column == LaunchColumn.RIGHT) play()
+        }
     }
     if (showOutput) OutputDialog(logs, onDismiss = { showOutput = false })
-    if (showVersionSettings && selected != null) {
-        VersionSettingsDialog(selected, repository, runtimes.orEmpty(), onDismiss = { viewModel.versionSettingsOpen.value = false })
-    }
 }
 
 /** Width of the launch column; wide enough for translated labels. */

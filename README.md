@@ -34,7 +34,7 @@ with Google's **Material 3 Expressive** components.
   the pack's files and its overrides, in an isolated folder.
 - **Java taken care of.** Sulfur picks the right installed Java per version
   and downloads the right one (Eclipse Temurin) when none fits.
-- **Settings per version.** Any version can have its own Java, memory, window,
+- **Settings per version.** A page of its own, opened beside Play: any version can have its own Java, memory, window,
   JVM and game arguments, garbage collector, wrapper command (e.g.
   `gamemoderun`), pre-launch command, environment variables and a server to
   join on start; anything left empty follows the global settings.
@@ -79,6 +79,7 @@ core/                 Rust workspace members
   sulfur-mods/        Modrinth and CurseForge clients, .mrpack modpacks
   sulfur-ffi/         UniFFI facade consumed by Kotlin (the only FFI surface)
   uniffi-bindgen/     generates the Kotlin bindings
+  sulfur-bundle/      the single-executable stub and its packer
 app/                  Kotlin + Compose Multiplatform desktop app
 docs/                 architecture, engine and platform notes
 ```
@@ -103,6 +104,18 @@ without it (the system's CJK font is used instead).
 ```bash
 ./gradlew :app:packageDistributionForCurrentOS
 ```
+
+Or the whole app as one executable for this OS
+(`app/build/compose/binaries/main-release/single/Sulfur-<version>-<os>-<arch>`):
+
+```bash
+./gradlew :app:packageSingleExecutable
+```
+
+It carries the app folder compressed inside it, unpacks it once into the
+user's cache (about a second) and starts it from there; later starts reuse
+it. On macOS a DMG is still the better download, since Finder opens a bare
+executable in Terminal.
 
 Useful extras:
 

@@ -384,6 +384,9 @@
     <string name="version_on">On</string>
     <string name="version_off">Off</string>
     <string name="version_global">Global</string>
+    <string name="version_memory">Memory</string>
+    <string name="version_server_address">Server address</string>
+    <string name="action_back">Back</string>
     <string name="settings_color_source_seed">Chosen color</string>
     <string name="settings_color_source_wallpaper">Wallpaper</string>
     <string name="settings_color_wallpaper_hint">Colors come from your desktop wallpaper and follow it when it changes.</string>

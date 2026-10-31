@@ -1,0 +1,39 @@
+[package]
+name = "sulfur-bundle"
+description = "Sulfur as one executable: a stub that carries the app folder and starts it"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The stub, renamed to Sulfur(.exe) by the build.
+[[bin]]
+name = "sulfur-stub"
+path = "src/bin/stub.rs"
+
+# Appends an app folder to the stub.
+[[bin]]
+name = "sulfur-pack"
+path = "src/bin/pack.rs"
+required-features = ["pack"]
+
+[features]
+# The packer, which compresses with the C zstd library; the stub only
+# decompresses, in pure Rust, so it builds for any target without a C compiler.
+pack = ["dep:zstd", "dep:sha2", "dep:hex"]
+
+[dependencies]
+directories.workspace = true
+hex = { workspace = true, optional = true }
+ruzstd = "0.8"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = { workspace = true, optional = true }
+tar.workspace = true
+zstd = { version = "0.13", features = ["zstdmt"], optional = true }
+
+[build-dependencies]
+winresource = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging"] }

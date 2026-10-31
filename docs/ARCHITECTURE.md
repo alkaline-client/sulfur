@@ -33,6 +33,7 @@ user intent. They meet at one narrow, generated boundary.
 | `sulfur-mods` | Mod search and file selection on Modrinth and CurseForge (official API with a key, MCIM mirror without); reading Modrinth modpacks (`mrpack`). | download |
 | `sulfur-ffi` | The only API Kotlin sees: one `SulfurCore` object, flat records, mapped errors. | all |
 | `uniffi-bindgen` | Generates `dev.sulfur.ffi` Kotlin bindings from the compiled library. | – |
+| `sulfur-bundle` | The single executable: `sulfur-stub` unpacks the app folder appended to it and starts it; `sulfur-pack` (feature `pack`) appends the folder. | – |
 
 Rules that keep this maintainable:
 
@@ -187,6 +188,11 @@ time limit.
 
 ### Launch page
 
+A version's settings open as a page in place of the launch layout (the
+button beside Play; Back or Esc returns). The page is laid out like Settings,
+with General, Java and memory, and Advanced sections; changes save half a
+second after the last edit and when the page closes by any route.
+
 `LaunchPageSettings` stores the Play column's side and a list of
 `LaunchWidget`s (kind, title, content). Cards: Minecraft news (the official
 launcher's feed, `launchercontent.mojang.com/v2/news.json`, Java entries only),
@@ -335,6 +341,31 @@ Layout rules that keep translations fitting:
    where JNA finds it at runtime (`linux-aarch64`, `win32-x86-64`, …).
 
 Cross-compiling: `-Psulfur.rustTarget=<triple> -Psulfur.jnaPrefix=<os-arch>`.
+
+### One executable
+
+Compose Desktop can only make an app *folder* (a jlinked Java runtime, the
+jars and the Rust core, about 210 MB); compiling Compose, Skiko, JavaFX and
+JNA ahead of time into one native binary is not practical. So
+`packageSingleExecutable` takes the folder from `createReleaseDistributable`
+and `sulfur-pack` writes:
+
+```text
+sulfur-stub | app folder as tar.zst | {"id", "entry"} JSON | lengths | "SULFURPK"
+```
+
+`id` is the start of the payload's SHA-256. On start the stub reads its own
+trailer and, unless `<cache>/app/<id>/.complete` exists, unpacks into a
+temporary folder that is renamed into place once complete, then removes
+other builds' folders. It `exec`s the app's launcher on Unix (so exit codes
+and signals pass straight through) and spawns it on Windows, where the stub is
+a GUI program with Sulfur's icon. `SULFUR_PORTABLE` moves the unpacked app
+under the portable folder like the rest of the data.
+
+The stub decompresses with `ruzstd` (pure Rust), so it builds for any target
+without a C compiler; only the packer, which runs at build time, uses the C
+zstd library. Compose packages for the host OS only, so each platform's
+executable is built on that platform.
 
 ## On-disk layout
 

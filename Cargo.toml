@@ -6,6 +6,7 @@ members = [
     "core/sulfur-minecraft",
     "core/sulfur-mods",
     "core/sulfur-ffi",
+    "core/sulfur-bundle",
     "core/uniffi-bindgen",
 ]
 

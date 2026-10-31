@@ -63,6 +63,8 @@ val msaClientId = providers.gradleProperty("sulfur.msaClientId")
     .map { it.trim() }
     .getOrElse("")
 
+val appVersion = "0.1.0"
+
 val cargoBuild by tasks.registering(Exec::class) {
     group = "rust"
     description = "Builds the Rust core library (sulfur-ffi)."
@@ -281,7 +283,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.AppImage)
             packageName = "Sulfur"
-            packageVersion = "0.1.0"
+            packageVersion = appVersion
             description = "A Minecraft launcher for everyone"
             vendor = "Sulfur"
             // jdk.jsobject: the JavaFX WebView's JavaScript bridge.
@@ -306,6 +308,59 @@ compose.desktop {
             isEnabled = false
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// One executable: the release app folder (Java runtime, jars, Rust core)
+// appended to a small Rust stub that unpacks it into the user's cache on
+// first start and runs it from there (core/sulfur-bundle).
+//
+// ./gradlew :app:packageSingleExecutable
+//   → build/compose/binaries/main-release/single/Sulfur-<version>-<os>-<arch>[.exe]
+// ---------------------------------------------------------------------------
+
+val exeSuffix = if (jnaPrefix.startsWith("win32")) ".exe" else ""
+
+val buildStub by tasks.registering(Exec::class) {
+    group = "rust"
+    description = "Builds the single-executable stub (sulfur-bundle)."
+    workingDir = repoRoot
+    commandLine(
+        listOf("cargo", "build", "-p", "sulfur-bundle", "--bin", "sulfur-stub", "--profile", rustProfile) +
+            (rustTarget?.let { listOf("--target", it) } ?: emptyList())
+    )
+    inputs.files(
+        fileTree(repoRoot.resolve("core/sulfur-bundle")),
+        repoRoot.resolve("Cargo.lock"),
+        project.file("icons/sulfur.ico"),
+    )
+    outputs.file(cargoOutDir.resolve("sulfur-stub$exeSuffix"))
+}
+
+tasks.register<Exec>("packageSingleExecutable") {
+    group = "compose desktop"
+    description = "Packs the release app into one executable for this platform."
+    dependsOn("createReleaseDistributable", buildStub)
+    val app = layout.buildDirectory.dir("compose/binaries/main-release/app").get().asFile
+    // The app's own launcher inside the folder Compose made.
+    val (folder, entry) = when {
+        isMac -> "Sulfur.app" to "Sulfur.app/Contents/MacOS/Sulfur"
+        isWindows -> "Sulfur" to "Sulfur/Sulfur.exe"
+        else -> "Sulfur" to "Sulfur/bin/Sulfur"
+    }
+    val output = layout.buildDirectory.file("compose/binaries/main-release/single/Sulfur-$appVersion-$jnaPrefix$exeSuffix").get().asFile
+    inputs.dir(app)
+    outputs.file(output)
+    doFirst { output.parentFile.mkdirs() }
+    workingDir = repoRoot
+    // The packer runs here, so it is built for the host even in cross builds.
+    commandLine(
+        "cargo", "run", "--quiet", "-p", "sulfur-bundle", "--features", "pack", "--bin", "sulfur-pack", "--profile", rustProfile, "--",
+        cargoOutDir.resolve("sulfur-stub$exeSuffix").absolutePath,
+        app.resolve(folder).absolutePath,
+        entry,
+        output.absolutePath,
+    )
 }
 
 // Renders pages to PNG off-screen:
