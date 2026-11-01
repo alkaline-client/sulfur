@@ -56,10 +56,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -107,6 +103,23 @@ import dev.sulfur.resources.mods_source_both
 import dev.sulfur.resources.mods_world
 import org.jetbrains.compose.resources.StringResource
 import dev.sulfur.resources.Res
+import dev.sulfur.resources.mods_category_all
+import dev.sulfur.resources.mods_category_adventure
+import dev.sulfur.resources.mods_category_equipment
+import dev.sulfur.resources.mods_category_food
+import dev.sulfur.resources.mods_category_library
+import dev.sulfur.resources.mods_category_magic
+import dev.sulfur.resources.mods_category_mobs
+import dev.sulfur.resources.mods_category_optimization
+import dev.sulfur.resources.mods_category_storage
+import dev.sulfur.resources.mods_category_technology
+import dev.sulfur.resources.mods_category_utility
+import dev.sulfur.resources.mods_category_worldgen
+import dev.sulfur.resources.mods_category_vanilla_like
+import dev.sulfur.resources.mods_category_realistic
+import dev.sulfur.resources.mods_category_fonts
+import dev.sulfur.resources.mods_category_modded
+import dev.sulfur.resources.mods_category_fantasy
 import dev.sulfur.resources.action_install
 import dev.sulfur.resources.action_load_more
 import dev.sulfur.resources.action_open_page
@@ -200,6 +213,17 @@ fun ModsPane(viewModel: ModsViewModel, repository: SulfurRepository, modifier: M
                 onSelect = viewModel::setKind,
                 fill = false,
             )
+            if (ui.categories.isNotEmpty()) {
+                val all = stringResource(Res.string.mods_category_all)
+                val names = ui.categories.associateWith { categoryName(it) }
+                CompactPicker(
+                    current = ui.category,
+                    options = listOf<String?>(null) + ui.categories,
+                    text = { it?.let(names::getValue) ?: all },
+                    placeholder = all,
+                    onSelect = viewModel::setCategory,
+                )
+            }
         }
         val notice = when {
             version == null -> Res.string.mods_no_version
@@ -292,6 +316,28 @@ private fun <T> CompactPicker(
             }
         }
     }
+}
+
+/** A category's name; resolutions (16x) are their own names. */
+@Composable
+private fun categoryName(name: String): String = when (name) {
+    "adventure" -> stringResource(Res.string.mods_category_adventure)
+    "equipment" -> stringResource(Res.string.mods_category_equipment)
+    "food" -> stringResource(Res.string.mods_category_food)
+    "library" -> stringResource(Res.string.mods_category_library)
+    "magic" -> stringResource(Res.string.mods_category_magic)
+    "mobs" -> stringResource(Res.string.mods_category_mobs)
+    "optimization" -> stringResource(Res.string.mods_category_optimization)
+    "storage" -> stringResource(Res.string.mods_category_storage)
+    "technology" -> stringResource(Res.string.mods_category_technology)
+    "utility" -> stringResource(Res.string.mods_category_utility)
+    "worldgen" -> stringResource(Res.string.mods_category_worldgen)
+    "vanilla-like" -> stringResource(Res.string.mods_category_vanilla_like)
+    "realistic" -> stringResource(Res.string.mods_category_realistic)
+    "fonts" -> stringResource(Res.string.mods_category_fonts)
+    "modded" -> stringResource(Res.string.mods_category_modded)
+    "fantasy" -> stringResource(Res.string.mods_category_fantasy)
+    else -> name
 }
 
 private fun kindTitle(kind: ProjectKind): StringResource = when (kind) {

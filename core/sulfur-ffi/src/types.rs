@@ -316,6 +316,8 @@ pub struct ModQuery {
     pub text: String,
     /// Installed version whose game version and loader filter the results.
     pub version_id: Option<String>,
+    /// One of `mod_categories(kind)`, or none for every category.
+    pub category: Option<String>,
     pub sort: ModSort,
     pub offset: u32,
 }

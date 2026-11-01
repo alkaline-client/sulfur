@@ -43,6 +43,9 @@ data class ModsUiState(
     val kind: ProjectKind = ProjectKind.MOD,
     val query: String = "",
     val sort: ModSort = ModSort.RELEVANCE,
+    /** Categories this kind can narrow to, and the one picked (null: all). */
+    val categories: List<String> = emptyList(),
+    val category: String? = null,
     /** Installed version the search is for; its folder is shown alongside. */
     val versionId: String? = null,
     /** Worlds of the version, for data packs. */
@@ -85,7 +88,7 @@ class ModsViewModel(
     private val repository: SulfurRepository,
     private val scope: CoroutineScope,
 ) {
-    private val _ui = MutableStateFlow(ModsUiState())
+    private val _ui = MutableStateFlow(ModsUiState(categories = repository.modCategories(ProjectKind.MOD)))
     val ui: StateFlow<ModsUiState> = _ui.asStateFlow()
     private var searchJob: Job? = null
 
@@ -119,8 +122,15 @@ class ModsViewModel(
     }
 
     fun setKind(kind: ProjectKind) {
-        _ui.update { it.copy(kind = kind, installedMods = emptyList()) }
+        _ui.update {
+            it.copy(kind = kind, installedMods = emptyList(), categories = repository.modCategories(kind), category = null)
+        }
         refreshInstalledMods()
+        search()
+    }
+
+    fun setCategory(category: String?) {
+        _ui.update { it.copy(category = category) }
         search()
     }
 
@@ -154,6 +164,7 @@ class ModsViewModel(
                         kind = state.kind,
                         text = state.query,
                         versionId = state.versionId,
+                        category = state.category,
                         sort = state.sort,
                         offset = offset,
                     )

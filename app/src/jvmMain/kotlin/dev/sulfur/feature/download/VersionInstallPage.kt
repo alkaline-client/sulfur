@@ -1,5 +1,6 @@
 package dev.sulfur.feature.download
 
+import dev.sulfur.ui.components.SelectField
 import androidx.compose.animation.AnimatedContent
 import dev.sulfur.ui.theme.Corners
 import androidx.compose.animation.animateColorAsState
@@ -22,10 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -422,28 +419,20 @@ private fun LoaderTile(
 
 @Composable
 private fun LoaderVersionPicker(versions: List<LoaderVersion>, chosen: String?, onChoose: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
     val current = versions.firstOrNull { it.version == chosen }
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        OutlinedTextField(
-            value = current?.let { versionLabel(it) } ?: "",
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            label = { Text(stringResource(Res.string.install_loader_version)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            versions.take(200).forEach { v ->
-                DropdownMenuItem(
-                    text = { Text(versionLabel(v)) },
-                    onClick = {
-                        onChoose(v.version)
-                        open = false
-                    },
-                )
-            }
+    SelectField(
+        value = current?.let { versionLabel(it) } ?: "",
+        label = stringResource(Res.string.install_loader_version),
+        modifier = Modifier.fillMaxWidth(),
+    ) { close ->
+        versions.take(200).forEach { v ->
+            DropdownMenuItem(
+                text = { Text(versionLabel(v)) },
+                onClick = {
+                    onChoose(v.version)
+                    close()
+                },
+            )
         }
     }
 }

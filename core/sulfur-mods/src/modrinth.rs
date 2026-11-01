@@ -44,6 +44,9 @@ pub(crate) fn search_url(query: &Query) -> String {
         let any: Vec<String> = loader_names(l).iter().map(|n| format!("\"categories:{n}\"")).collect();
         facets.push(format!("[{}]", any.join(",")));
     }
+    if let Some(c) = &query.category {
+        facets.push(format!(r#"["categories:{c}"]"#));
+    }
     let index = match query.sort {
         Sort::Relevance => "relevance",
         Sort::Downloads => "downloads",
@@ -250,5 +253,7 @@ mod tests {
         let shaders = search_url(&Query { kind: ProjectKind::Shader, loader: Some(Loader::Fabric), ..Default::default() });
         assert!(shaders.contains("project_type%3Ashader") && !shaders.contains("categories"));
         assert!(url.ends_with("&index=relevance&offset=0&limit=20"));
+        let packs = search_url(&Query { kind: ProjectKind::ResourcePack, category: Some("16x".into()), ..Default::default() });
+        assert!(packs.contains(&encode(r#"["categories:16x"]"#)));
     }
 }

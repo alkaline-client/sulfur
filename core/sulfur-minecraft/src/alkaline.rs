@@ -25,6 +25,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::{
     McError, Result,
+    account::{Account, AccountKind},
     install::{InstallMonitor, InstallStage, Installer},
     launch::LaunchCommand,
     platform::{Arch, Os, Platform},
@@ -429,6 +430,9 @@ pub struct LaunchOptions {
     pub server: Option<String>,
     pub wrapper: Vec<String>,
     pub env: Vec<(String, String)>,
+    /// The player to sign in as: Alkaline reads it from its environment
+    /// (an offline account goes without a token).
+    pub account: Option<Account>,
 }
 
 /// The command that starts the client in `home` through its start script,
@@ -459,6 +463,14 @@ pub fn command(home: &Path, opts: &LaunchOptions) -> LaunchCommand {
     ];
     if let Some(jar) = &opts.minecraft_jar {
         env.push(("ALKALINE_MINECRAFT_JAR".to_owned(), jar.to_string_lossy().into_owned()));
+    }
+    if let Some(account) = &opts.account {
+        env.push(("ALKALINE_PLAYER_NAME".to_owned(), account.name.clone()));
+        env.push(("ALKALINE_PLAYER_UUID".to_owned(), account.uuid.clone()));
+        if account.kind == AccountKind::Microsoft {
+            // In the environment rather than the arguments, which other users can read.
+            env.push(("ALKALINE_ACCESS_TOKEN".to_owned(), account.access_token.clone()));
+        }
     }
     env.extend(opts.env.iter().cloned());
 
@@ -593,6 +605,7 @@ mod tests {
             server: Some("localhost:25565".into()),
             wrapper: vec!["gamemoderun".into()],
             env: vec![("A".into(), "1".into())],
+            account: Some(Account::microsoft("Steve", "abc", "token", "x")),
         };
         let cmd = command(Path::new("/client"), &opts);
         if cfg!(windows) {
@@ -605,5 +618,8 @@ mod tests {
         assert_eq!(env("JAVA_OPTS"), Some("-Xmx4096m \"-Dname=a b\""));
         assert_eq!(env("ALKALINE_MINECRAFT_JAR"), Some("/mc/versions/1.8.9/1.8.9.jar"));
         assert_eq!(env("A"), Some("1"));
+        assert_eq!(env("ALKALINE_PLAYER_NAME"), Some("Steve"));
+        assert_eq!(env("ALKALINE_ACCESS_TOKEN"), Some("token"));
+        assert!(!cmd.args.iter().any(|a| a.contains("token")));
     }
 }

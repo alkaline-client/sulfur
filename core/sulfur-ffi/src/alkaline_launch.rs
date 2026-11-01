@@ -75,6 +75,14 @@ impl State {
             CoreError::NotFound("Alkaline was not found; choose its folder in Settings → Game".into())
         })?;
         let game = settings.game.launch_settings(id);
+        // Alkaline signs in as Sulfur's account; without one it still starts, with its own sign-in.
+        let account = match self.launch_account().await {
+            Ok(account) => Some(account),
+            Err(e) => {
+                tracing::warn!(error = %e, "starting Alkaline without an account");
+                None
+            }
+        };
         let java = self.find_java(game.java_path.as_deref(), settings.game.auto_java, id, alkaline::JAVA_MAJOR).await?;
         if let alkaline::Client::Source(root) = &client
             && client.needs_build()
@@ -102,6 +110,7 @@ impl State {
             server: Some(game.server_address.clone()).filter(|s| !s.is_empty()),
             wrapper: launch::split_args(&game.wrapper_command),
             env: launch::parse_env(&game.env_vars),
+            account,
         };
         let command = alkaline::command(&client.home(), &options);
         if !game.pre_launch_command.trim().is_empty() {

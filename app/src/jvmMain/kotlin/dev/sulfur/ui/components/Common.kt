@@ -45,6 +45,17 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -455,3 +466,47 @@ fun formatCount(count: ULong): String =
 fun formatDate(timestamp: String): String = runCatching {
     OffsetDateTime.parse(timestamp).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault()))
 }.getOrDefault(timestamp.take(10))
+
+/**
+ * A read-only field that opens a menu of choices ([items] gets the function
+ * that closes it). Material's ExposedDropdownMenuBox opens from the field's
+ * focus, which on desktop a click often only moved, so it took several clicks;
+ * here the whole field is one click target and the field never takes focus.
+ */
+@Composable
+fun SelectField(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    leadingIcon: (@Composable () -> Unit)? = null,
+    supportingText: (@Composable () -> Unit)? = null,
+    items: @Composable ColumnScope.(close: () -> Unit) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    var width by remember { mutableStateOf(0) }
+    Box(modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            leadingIcon = leadingIcon,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
+            supportingText = supportingText,
+            modifier = Modifier.fillMaxWidth().onSizeChanged { width = it.width },
+        )
+        // Opens rather than toggles: a click on the field while the menu is up
+        // already dismissed it as a click outside.
+        Box(
+            Modifier.matchParentSize()
+                .pointerHoverIcon(PointerIcon.Hand)
+                .clickable(remember { MutableInteractionSource() }, indication = null) { open = true },
+        )
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            modifier = Modifier.width(with(LocalDensity.current) { width.toDp() }),
+        ) { items { open = false } }
+    }
+}

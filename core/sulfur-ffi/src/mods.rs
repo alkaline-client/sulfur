@@ -136,6 +136,12 @@ impl SulfurCore {
     /// Searches projects; with `version_id`, only those for its game version
     /// (and, for mods, its loader). Several sources are searched together and
     /// their results merged.
+    /// The categories a search for `kind` can narrow to, by their Modrinth
+    /// names (both sources have each of them).
+    pub fn mod_categories(&self, kind: ProjectKind) -> Vec<String> {
+        sulfur_mods::categories(kind.into()).iter().map(|(name, _)| (*name).to_owned()).collect()
+    }
+
     pub async fn search_mods(&self, query: ModQuery) -> Result<ModPage> {
         let state = self.state.clone();
         self.runtime
@@ -158,6 +164,7 @@ impl SulfurCore {
                             text: query.text,
                             game_version,
                             loader,
+                            category: query.category,
                             sort: query.sort.into(),
                             offset: query.offset,
                             limit: PAGE,

@@ -114,7 +114,7 @@ Requirements: Rust (stable, 1.85+), JDK 21+ (17+ for packaging), and the usual
 native toolchain for your OS. Gradle builds the Rust core and the bindings for you.
 
 The first build also downloads the MiSans font (about 20 MB, from Xiaomi) for
-Chinese and Japanese. Its license lets apps embed it but not redistribute the
+Chinese and Japanese characters. Its license lets apps embed it but not redistribute the
 font files, so it is not in the repository. Offline, pass
 `-Psulfur.cjkFont=/path/to/MiSansVF.ttf`, or `-Psulfur.cjkFont=none` to build
 without it (the system's CJK font is used instead).

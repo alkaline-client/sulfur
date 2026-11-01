@@ -155,7 +155,7 @@
     <string name="update_1_4">Pretty Scary Update</string>
     <string name="update_1_0">Adventure Update</string>
     <!-- Archive section: versions preserved by Omniarchive -->
-    <string name="archive_hint">Versions Mojang no longer offers, preserved by Omniarchive. They come as bare game files, so Sulfur starts each like the closest official version of its time, and some may not run.</string>
+    <string name="archive_hint">Versions Mojang no longer offers, preserved by Omniarchive. Some may not run.</string>
     <string name="archive_search">Search archived versions</string>
     <string name="archive_loading">Reading the archive…</string>
     <string name="archive_all">All</string>
@@ -212,7 +212,7 @@
     <string name="install_optifine_hint">OptiFine runs on its own here. To use it with Forge, install Forge and add OptiFine as a mod.</string>
     <string name="install_rift_hint">Rift is no longer developed. It only runs Minecraft 1.13.2.</string>
     <string name="install_cleanroom_hint">Cleanroom runs Forge mods for 1.12.2 on modern Java. Sulfur downloads Java 21 for it if needed.</string>
-    <string name="install_cleanroom_page_hint">The Cleanroom team asks launchers to send players to its download page. Pick an installer there and Sulfur installs it.</string>
+    <string name="install_cleanroom_page_hint">Pick an installer on Cleanroom’s download page.</string>
     <string name="install_cleanroom_open_page">Open download page</string>
     <string name="install_cleanroom_picked">Installer %1$s</string>
     <string name="loader_unavailable">Unavailable</string>
@@ -223,7 +223,7 @@
     <string name="install_installed_hint">This version is installed. Pick a mod loader to add it as a new version.</string>
     <string name="cleanroom_page_title">Download Cleanroom</string>
     <string name="cleanroom_page_hint">Click Download → Installer for the build you want. Sulfur takes it from there.</string>
-    <string name="cleanroom_page_unavailable">The page cannot be shown inside Sulfur on this system. Open it in your browser, download an installer, then choose the file.</string>
+    <string name="cleanroom_page_unavailable">The page can’t show here. Download an installer in your browser, then choose the file.</string>
     <string name="loader_recommended">%1$s · recommended</string>
     <string name="loader_unstable">%1$s</string>
 
@@ -244,6 +244,23 @@
     <string name="mods_sort_relevance">Relevance</string>
     <string name="mods_sort_downloads">Downloads</string>
     <string name="mods_sort_updated">Recently updated</string>
+    <string name="mods_category_all">All categories</string>
+    <string name="mods_category_adventure">Adventure</string>
+    <string name="mods_category_equipment">Equipment</string>
+    <string name="mods_category_food">Food</string>
+    <string name="mods_category_library">Library</string>
+    <string name="mods_category_magic">Magic</string>
+    <string name="mods_category_mobs">Mobs</string>
+    <string name="mods_category_optimization">Optimization</string>
+    <string name="mods_category_storage">Storage</string>
+    <string name="mods_category_technology">Technology</string>
+    <string name="mods_category_utility">Utility</string>
+    <string name="mods_category_worldgen">World generation</string>
+    <string name="mods_category_vanilla_like">Vanilla-like</string>
+    <string name="mods_category_realistic">Realistic</string>
+    <string name="mods_category_fonts">Fonts</string>
+    <string name="mods_category_modded">Mod support</string>
+    <string name="mods_category_fantasy">Fantasy</string>
     <string name="mods_by">by %1$s</string>
     <string name="mods_downloads">%1$s downloads</string>
     <string name="mods_folder">Mods in %1$s</string>
@@ -255,8 +272,8 @@
     <string name="version_mods_find">Find more</string>
     <string name="version_mods_count">%1$d of %2$d turned on</string>
     <string name="mods_shaders_hint">Shaders need Iris (Fabric, Quilt, NeoForge) or OptiFine.</string>
-    <string name="mods_no_version">Install a version first. Mods need a version with a mod loader such as Fabric, Forge or NeoForge.</string>
-    <string name="mods_no_loader">This version has no mod loader. Install it again with Fabric, Forge or NeoForge from Game versions to add mods.</string>
+    <string name="mods_no_version">Install a version with Fabric, Forge or NeoForge first.</string>
+    <string name="mods_no_loader">This version has no mod loader.</string>
 
     <!-- Settings page -->
     <string name="settings_title">Settings</string>
@@ -283,11 +300,11 @@
     <string name="settings_java_downloaded">Downloaded by Sulfur</string>
     <string name="settings_jvm">JVM arguments</string>
     <string name="settings_log4j">Log4Shell protection</string>
-    <string name="settings_log4j_hint">Patches the Log4j vulnerability (CVE-2021-44228) in Minecraft 1.7 to 1.18.0 with JVM arguments. Turn it off only if a mod needs the original logging setup.</string>
+    <string name="settings_log4j_hint">Patches CVE-2021-44228 in Minecraft 1.7 to 1.18.0.</string>
     <string name="settings_mods_and_resources">Mods &amp; resources</string>
     <string name="settings_cleanroom">Cleanroom</string>
     <string name="settings_cleanroom_direct">Download Cleanroom automatically</string>
-    <string name="settings_cleanroom_direct_hint">Skips Cleanroom’s download page. Its team asks launchers to send players there, which supports the project, so this is off by default.</string>
+    <string name="settings_cleanroom_direct_hint">Skips Cleanroom’s download page, which supports the project.</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
@@ -302,13 +319,13 @@
     <string name="settings_isolation">Saves and mods of new versions</string>
     <string name="settings_isolation_isolated">Isolated per version</string>
     <string name="settings_isolation_shared">Shared</string>
-    <string name="settings_isolation_hint">Isolated versions keep saves, mods and options in versions/&lt;id&gt;. Each version can override this on the Launch page.</string>
+    <string name="settings_isolation_hint">Isolated versions keep saves, mods and options in versions/&lt;id&gt;.</string>
     <string name="settings_import">Import from another launcher</string>
-    <string name="settings_import_hint">Brings over game folders, memory, window, Java, download and isolation settings from HMCL, PCL Community Edition and PCL2. Choose the folder a launcher is in; settings in their usual places are found automatically. Accounts are not imported.</string>
+    <string name="settings_import_hint">Brings over folders and settings from HMCL, PCL Community Edition and PCL2. Accounts are not imported.</string>
     <string name="settings_import_choose">Choose launcher folder…</string>
     <string name="settings_import_none">No other launcher’s settings found. Choose the folder HMCL or PCL is in.</string>
     <string name="settings_import_use_folder">Use its game folder</string>
-    <string name="settings_import_use_folder_hint">When off, Sulfur keeps its own game folder and only copies files from that launcher’s folders instead of downloading them.</string>
+    <string name="settings_import_use_folder_hint">When off, files are copied from that launcher’s folders instead.</string>
     <string name="settings_import_game_dirs">Game folders: %1$s</string>
     <string name="settings_import_window">Window: %1$s</string>
     <string name="settings_memory">Memory: %1$s GiB</string>
@@ -323,15 +340,15 @@
     <string name="settings_source_auto">Automatic</string>
     <string name="settings_source_official">Official</string>
     <string name="settings_source_mirror">Mirrors first</string>
-    <string name="settings_source_auto_hint">Official servers first; mirrors take over files that fail (BMCLAPI for the game, MCIM for Modrinth and CurseForge).</string>
+    <string name="settings_source_auto_hint">Official servers first, mirrors for files that fail.</string>
     <string name="settings_source_official_hint">Only official servers.</string>
-    <string name="settings_source_mirror_hint">Mirrors first, official servers as fallback: BMCLAPI for the game and loaders, MCIM for Modrinth and CurseForge. Often faster in mainland China.</string>
+    <string name="settings_source_mirror_hint">Mirrors first (BMCLAPI, MCIM). Often faster in mainland China.</string>
     <string name="settings_connections">Connections: %1$s</string>
     <string name="settings_segments">Parallel ranges per large file: %1$s</string>
     <string name="settings_curseforge_key">CurseForge API key</string>
     <string name="settings_curseforge_key_hint">Optional. Without a key, CurseForge is searched through the MCIM mirror.</string>
     <string name="settings_reuse">Reuse existing files</string>
-    <string name="settings_reuse_hint">Before downloading, Sulfur looks for identical files (verified by hash) in these folders and links or copies them instead.</string>
+    <string name="settings_reuse_hint">Identical files in these folders are linked or copied instead of downloaded.</string>
     <string name="settings_reuse_official">Official launcher’s folder</string>
     <string name="settings_reuse_official_hint">.minecraft, if it exists</string>
     <string name="settings_reuse_another">Another game folder</string>
@@ -368,8 +385,8 @@
     <string name="gc_auto">JVM default</string>
     <string name="gc_auto_hint">Leaves the choice to Java (G1 on current versions).</string>
     <string name="gc_g1_hint">G1 tuned like the official launcher: short pauses, a good fit for most games.</string>
-    <string name="gc_zgc_hint">Generational ZGC: almost no pauses, for large modpacks with plenty of memory. Needs Java 17 or newer.</string>
-    <string name="gc_shenandoah_hint">Short pauses with little extra memory. Needs an OpenJDK build of Java 12 or newer; other Java builds use their default.</string>
+    <string name="gc_zgc_hint">Almost no pauses, for large modpacks. Java 17+.</string>
+    <string name="gc_shenandoah_hint">Short pauses, little extra memory. OpenJDK 12+.</string>
     <string name="gc_parallel_hint">Highest throughput but longer pauses, which can show as stutter.</string>
     <string name="settings_game_args">Extra game arguments</string>
     <string name="settings_min_memory">Initial memory (MiB)</string>
@@ -377,7 +394,7 @@
     <string name="settings_wrapper">Wrapper command</string>
     <string name="settings_wrapper_hint">The game runs through this program, e.g. gamemoderun, prime-run or mangohud.</string>
     <string name="settings_pre_launch">Pre-launch command</string>
-    <string name="settings_pre_launch_hint">Runs in the game folder before the game starts, and launching waits for it. INST_DIR, INST_NAME and INST_JAVA are set.</string>
+    <string name="settings_pre_launch_hint">Runs in the game folder before launch. INST_DIR, INST_NAME and INST_JAVA are set.</string>
     <string name="settings_env">Environment variables</string>
     <string name="settings_env_hint">One NAME=value per line.</string>
     <string name="version_tab_general">General</string>
@@ -441,10 +458,9 @@
     <string name="settings_seasonal">Seasonal touches</string>
     <string name="settings_seasonal_hint">Bats on Halloween, snow at Christmas and confetti on a few other special days.</string>
     <string name="settings_alkaline">Alkaline</string>
-    <string name="settings_alkaline_about">Alkaline, a Minecraft 1.8.9 PvP client, shows up with your versions. Play installs its newest release, keeps it up to date, and fetches the Java 25 and 1.8.9 game files it needs.</string>
     <string name="settings_alkaline_dir">Use another folder</string>
-    <string name="settings_alkaline_found">Found. Pick Alkaline next to Play on the Launch page.</string>
-    <string name="settings_alkaline_missing">Not found. Choose the client folder (with bin/game-client) or the legacy source checkout.</string>
+    <string name="settings_alkaline_found">Found</string>
+    <string name="settings_alkaline_missing">No Alkaline client here</string>
     <string name="settings_alkaline_choose">Choose the Alkaline folder</string>
     <string name="tasks_title">Tasks</string>
     <string name="tasks_open">Show tasks</string>
@@ -458,9 +474,7 @@
     <string name="task_java_done">Downloaded %1$s</string>
     <string name="task_java_failed">Could not download %1$s</string>
     <string name="task_files">%1$s of %2$s files</string>
-    <string name="task_reused">%1$s already there</string>
     <string name="task_bytes">%1$s of %2$s</string>
-    <string name="task_speed">%1$s/s</string>
     <string name="task_eta">%1$s left</string>
     <string name="settings_alkaline_installed">Alkaline %1$s is installed</string>
     <string name="settings_alkaline_not_installed">Alkaline is not installed yet</string>
@@ -469,12 +483,9 @@
     <string name="settings_alkaline_check_failed">Could not check for releases: %1$s</string>
     <string name="settings_alkaline_no_release">Alkaline has no release yet.</string>
     <string name="settings_alkaline_no_download">Alkaline %1$s has no download for this system yet.</string>
-    <string name="settings_alkaline_latest">Newest release: %1$s</string>
-    <string name="settings_alkaline_latest_date">Newest release: %1$s, from %2$s</string>
+    <string name="settings_alkaline_latest">Newest: %1$s</string>
     <string name="settings_alkaline_update">Update to %1$s</string>
     <string name="settings_alkaline_notes">Release notes</string>
     <string name="settings_alkaline_feed">Release feed</string>
     <string name="settings_alkaline_feed_default">GitHub releases</string>
-    <string name="settings_alkaline_feed_hint">The address of a release feed, such as Alkaline's own server. Empty uses GitHub.</string>
-    <string name="settings_alkaline_dir_hint">A client folder (with bin/game-client) or the legacy source checkout, which Sulfur builds.</string>
 </resources>

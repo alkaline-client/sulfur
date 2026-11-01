@@ -326,16 +326,17 @@ Layout rules that keep translations fitting:
   value is shown elsewhere.
 - Numbers and dates go through `formatCount`/`formatDate`, which follow the locale
   (e.g. "1.2万" in Chinese).
-- Fonts: Google Sans Flex for Latin-script languages. When the UI language
-  is Chinese or Japanese the whole type scale uses MiSans (Xiaomi, variable
-  weight; its Latin matches its Han and kana). The `fetchCjkFont` Gradle task
-  takes `MiSansVF.ttf` out of Xiaomi's download with HTTP range requests, checks
-  its SHA-256 and embeds it as a classpath resource; it is not committed because
-  the MiSans license forbids redistributing the font files on their own, and it
-  requires crediting MiSans in the app (Misc → Credits). Without it, or for CJK
-  text in a Latin UI, Skia uses the system's CJK font: Compose desktop asks the
-  system font manager before fonts the app loaded, so MiSans cannot be a
-  per-character fallback without patching Compose internals.
+- Fonts: Google Sans Flex first, in every language, and MiSans (Xiaomi,
+  variable weight) for the characters Google Sans Flex lacks (Han, kana). The
+  `fetchCjkFont` Gradle task takes `MiSansVF.ttf` out of Xiaomi's download with
+  HTTP range requests, checks its SHA-256 and embeds it as a classpath resource;
+  it is not committed because the MiSans license forbids redistributing the font
+  files on their own, and it requires crediting MiSans in the app (Misc →
+  Credits). Compose desktop gives Skia a list of fonts to try in order only for
+  its generic families, so `Theme.kt` registers both fonts with Skia's font
+  collection and puts them at the front of the sans-serif list (through two
+  Compose internals, read by reflection). If that fails, or MiSans is missing,
+  the type scale is Google Sans Flex alone and Skia uses the system's CJK font.
 - Messages from the Rust core (errors) are English for now.
 
 ## Build pipeline

@@ -89,8 +89,6 @@ import dev.sulfur.resources.task_files
 import dev.sulfur.resources.task_java_done
 import dev.sulfur.resources.task_java_failed
 import dev.sulfur.resources.task_java_running
-import dev.sulfur.resources.task_reused
-import dev.sulfur.resources.task_speed
 import dev.sulfur.resources.tasks_clear_finished
 import dev.sulfur.resources.tasks_empty
 import dev.sulfur.resources.tasks_open
@@ -312,16 +310,13 @@ private fun TaskCard(task: InstallSnapshot, onCancel: () -> Unit, onDismiss: () 
     }
 }
 
-/** Files, bytes, speed and time left, as short facts on one line. */
+/** How much is done (bytes, or files while sizes are unknown) and the time left; the bar says the rest. */
 @Composable
 private fun TaskStats(task: InstallSnapshot) {
     val facts = buildList {
-        add(stringResource(Res.string.task_files, task.filesDone.toString(), task.filesTotal.toString()))
-        val already = task.filesSkipped + task.filesReused
-        if (already > 0u) add(stringResource(Res.string.task_reused, already.toString()))
         if (task.bytesTotal > 0u) add(stringResource(Res.string.task_bytes, formatBytes(task.bytesDone), formatBytes(task.bytesTotal)))
+        else add(stringResource(Res.string.task_files, task.filesDone.toString(), task.filesTotal.toString()))
         if (task.bytesPerSecond > 0.0) {
-            add(stringResource(Res.string.task_speed, formatBytes(task.bytesPerSecond)))
             val left = (task.bytesTotal.toDouble() - task.bytesDone.toDouble()) / task.bytesPerSecond
             if (left in 1.0..86_400.0) add(stringResource(Res.string.task_eta, formatDuration(left.toLong())))
         }
@@ -330,7 +325,7 @@ private fun TaskStats(task: InstallSnapshot) {
         facts.joinToString(" · "),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 2,
+        maxLines = 1,
     )
 }
 

@@ -65,7 +65,15 @@ pub(crate) fn search_path(query: &Query) -> String {
     if let Some(t) = query.loader.filter(|_| query.kind == ProjectKind::Mod).and_then(loader_type) {
         path.push_str(&format!("&modLoaderType={t}"));
     }
+    if let Some(id) = query.category.as_deref().and_then(|c| category_id(query.kind, c)) {
+        path.push_str(&format!("&categoryId={id}"));
+    }
     path
+}
+
+/// CurseForge's id for the shared category Modrinth calls `name`.
+fn category_id(kind: ProjectKind, name: &str) -> Option<u32> {
+    crate::categories(kind).iter().find(|(n, _)| *n == name).map(|(_, id)| *id)
 }
 
 pub(crate) async fn search(client: &ModsClient, query: &Query, cancel: &CancellationToken) -> Result<SearchPage> {
@@ -233,6 +241,7 @@ mod tests {
             loader: Some(Loader::NeoForge),
             sort: Sort::Downloads,
             kind: ProjectKind::Mod,
+            category: None,
             offset: 20,
             limit: 20,
         });
@@ -240,6 +249,8 @@ mod tests {
             path,
             "/v1/mods/search?gameId=432&classId=6&searchFilter=jei&sortField=6&sortOrder=desc&index=20&pageSize=20&gameVersion=1.21.1&modLoaderType=6"
         );
+        let packs = search_path(&Query { kind: ProjectKind::Shader, category: Some("realistic".into()), ..Default::default() });
+        assert!(packs.contains("classId=6552") && packs.ends_with("&categoryId=6553"));
         assert_eq!(cdn_url(9322591, "a b.jar"), "https://mediafilez.forgecdn.net/files/9322/591/a%20b.jar");
     }
 }

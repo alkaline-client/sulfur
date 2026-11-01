@@ -533,7 +533,7 @@ impl SulfurCore {
         self.runtime
             .spawn(async move {
                 // Versioned: older caches lack newer artwork sources.
-                let cache_file = state.dirs.cache.join("banners-v3.json");
+                let cache_file = state.dirs.cache.join("banners-v4.json");
                 let from_disk = || -> Option<Vec<banners::Banner>> {
                     serde_json::from_slice(&std::fs::read(&cache_file).ok()?).ok()
                 };

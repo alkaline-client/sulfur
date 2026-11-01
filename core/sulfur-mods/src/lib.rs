@@ -58,9 +58,53 @@ pub struct Query {
     pub text: String,
     pub game_version: Option<String>,
     pub loader: Option<Loader>,
+    /// One of [`categories`] for this kind, by its Modrinth name.
+    pub category: Option<String>,
     pub sort: Sort,
     pub offset: u32,
     pub limit: u32,
+}
+
+/// The categories both sources have for `kind`, as (Modrinth name,
+/// CurseForge category id in the kind's class), in the order a list shows
+/// them. Modpacks are searched on Modrinth alone and have none here.
+pub fn categories(kind: ProjectKind) -> &'static [(&'static str, u32)] {
+    match kind {
+        ProjectKind::Mod => &[
+            ("adventure", 422),
+            ("equipment", 434),
+            ("food", 436),
+            ("library", 421),
+            ("magic", 419),
+            ("mobs", 411),
+            ("optimization", 6814),
+            ("storage", 420),
+            ("technology", 412),
+            ("utility", 5191),
+            ("worldgen", 406),
+        ],
+        ProjectKind::ResourcePack => &[
+            ("16x", 393),
+            ("32x", 394),
+            ("64x", 395),
+            ("128x", 396),
+            ("256x", 397),
+            ("512x+", 398),
+            ("vanilla-like", 403),
+            ("realistic", 400),
+            ("fonts", 5244),
+            ("modded", 4465),
+        ],
+        ProjectKind::DataPack => &[
+            ("adventure", 6948),
+            ("library", 6950),
+            ("magic", 6952),
+            ("technology", 6951),
+            ("utility", 6953),
+        ],
+        ProjectKind::Shader => &[("vanilla-like", 6555), ("realistic", 6553), ("fantasy", 6554)],
+        ProjectKind::Modpack => &[],
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

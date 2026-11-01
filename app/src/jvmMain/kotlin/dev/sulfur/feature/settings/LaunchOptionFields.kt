@@ -1,15 +1,12 @@
 package dev.sulfur.feature.settings
 
+import dev.sulfur.ui.components.SelectField
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -190,41 +187,33 @@ internal fun ProcessFields(
  */
 @Composable
 internal fun JavaChoice(runtimes: List<JavaRuntime>, selected: String?, defaultLabel: String, onSelect: (String?) -> Unit) {
-    var open by remember { mutableStateOf(false) }
     val managedLabel = stringResource(Res.string.settings_java_downloaded)
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        OutlinedTextField(
-            value = selected ?: defaultLabel,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(Res.string.settings_java)) },
-            leadingIcon = { Icon(painterResource(Res.drawable.ic_coffee), null) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+    SelectField(
+        value = selected ?: defaultLabel,
+        label = stringResource(Res.string.settings_java),
+        modifier = Modifier.fillMaxWidth(),
+        leadingIcon = { Icon(painterResource(Res.drawable.ic_coffee), null) },
+    ) { close ->
+        DropdownMenuItem(
+            text = { Text(defaultLabel) },
+            onClick = {
+                onSelect(null)
+                close()
+            },
         )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        runtimes.forEach { java ->
             DropdownMenuItem(
-                text = { Text(defaultLabel) },
+                text = {
+                    Text(
+                        if (java.managed) "Java ${java.major} · ${java.arch} · $managedLabel"
+                        else "Java ${java.major} · ${java.arch} · ${java.path}"
+                    )
+                },
                 onClick = {
-                    onSelect(null)
-                    open = false
+                    onSelect(java.path)
+                    close()
                 },
             )
-            runtimes.forEach { java ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            if (java.managed) "Java ${java.major} · ${java.arch} · $managedLabel"
-                            else "Java ${java.major} · ${java.arch} · ${java.path}"
-                        )
-                    },
-                    onClick = {
-                        onSelect(java.path)
-                        open = false
-                    },
-                )
-            }
         }
     }
 }

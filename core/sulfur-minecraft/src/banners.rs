@@ -121,6 +121,22 @@ pub async fn fetch(downloader: &Downloader, groups: &[VersionGroup], cancel: &Ca
             Err(e) => tracing::warn!(error = %e, "wiki files unavailable"),
         }
     }
+    // Groups whose page image repeats a neighbor's take a wiki file of their own.
+    let own: Vec<(usize, String)> = missing
+        .iter()
+        .filter_map(|&i| own_file(&groups[i].key).map(|file| (i, file.to_owned())))
+        .collect();
+    if !own.is_empty() {
+        let files: Vec<String> = own.iter().map(|(_, file)| file.clone()).collect();
+        match wiki_files(downloader, &files, cancel).await {
+            Ok(found) => {
+                for (i, file) in &own {
+                    banners[*i].image_url = found.get(file).cloned();
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "wiki files unavailable"),
+        }
+    }
     let missing: Vec<usize> = missing.into_iter().filter(|&i| banners[i].image_url.is_none()).collect();
     if !missing.is_empty() {
         let titles: Vec<String> = missing.iter().map(|&i| wiki_title(&groups[i])).collect();
@@ -143,6 +159,16 @@ fn update_key(name: &str) -> String {
     let key: String = words.chars().filter(char::is_ascii_alphanumeric).collect();
     let key = key.strip_prefix("the").unwrap_or(&key);
     key.strip_suffix("update").unwrap_or(key).to_owned()
+}
+
+/// A wiki file for a group whose page image would repeat another's: 1.0's
+/// page shows the same world as 1.1's, so 1.0 shows its title screen, as the
+/// cards of 1.2 to 1.5 do.
+fn own_file(key: &str) -> Option<&'static str> {
+    match key {
+        "1.0" => Some("File:Java Edition 1.0.0 menu.png"),
+        _ => None,
+    }
 }
 
 /// The wiki page about a group; the newest joke's page for April Fools.

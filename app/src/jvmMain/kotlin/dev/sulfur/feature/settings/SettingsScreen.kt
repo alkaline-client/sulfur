@@ -22,10 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
@@ -219,7 +215,6 @@ import dev.sulfur.ffi.CornerStyle
 import dev.sulfur.resources.action_choose_folder
 import dev.sulfur.resources.ic_bolt
 import dev.sulfur.resources.settings_alkaline
-import dev.sulfur.resources.settings_alkaline_about
 import dev.sulfur.resources.settings_alkaline_choose
 import dev.sulfur.resources.settings_alkaline_dir
 import dev.sulfur.resources.settings_alkaline_found
@@ -239,13 +234,10 @@ import dev.sulfur.resources.action_install
 import dev.sulfur.resources.settings_alkaline_check
 import dev.sulfur.resources.settings_alkaline_check_failed
 import dev.sulfur.resources.settings_alkaline_checking
-import dev.sulfur.resources.settings_alkaline_dir_hint
 import dev.sulfur.resources.settings_alkaline_feed
 import dev.sulfur.resources.settings_alkaline_feed_default
-import dev.sulfur.resources.settings_alkaline_feed_hint
 import dev.sulfur.resources.settings_alkaline_installed
 import dev.sulfur.resources.settings_alkaline_latest
-import dev.sulfur.resources.settings_alkaline_latest_date
 import dev.sulfur.resources.settings_alkaline_no_download
 import dev.sulfur.resources.settings_alkaline_no_release
 import dev.sulfur.resources.settings_alkaline_not_installed
@@ -492,7 +484,6 @@ private fun AlkalineSection(settings: Settings, update: Update, repository: Sulf
             RefreshButton(release == null, stringResource(Res.string.settings_alkaline_check), onClick = { checks++ })
         },
     ) {
-        Hint(stringResource(Res.string.settings_alkaline_about))
         val latest = release?.getOrNull()
         val current = remember(installed) { repository.alkalineInstalled() }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -512,7 +503,6 @@ private fun AlkalineSection(settings: Settings, update: Update, repository: Sulf
                             r.isFailure -> stringResource(Res.string.settings_alkaline_check_failed, r.exceptionOrNull()?.message.orEmpty())
                             latest == null -> stringResource(Res.string.settings_alkaline_no_release)
                             !latest.available -> stringResource(Res.string.settings_alkaline_no_download, latest.version)
-                            latest.published.isNotEmpty() -> stringResource(Res.string.settings_alkaline_latest_date, latest.version, latest.published)
                             else -> stringResource(Res.string.settings_alkaline_latest, latest.version)
                         }
                     }
@@ -534,7 +524,6 @@ private fun AlkalineSection(settings: Settings, update: Update, repository: Sulf
             onValueChange = { feed -> update { it.copy(alkalineFeed = feed.ifBlank { null }) } },
             label = { Text(stringResource(Res.string.settings_alkaline_feed)) },
             placeholder = { Text(stringResource(Res.string.settings_alkaline_feed_default)) },
-            supportingText = { Text(stringResource(Res.string.settings_alkaline_feed_hint)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -543,17 +532,9 @@ private fun AlkalineSection(settings: Settings, update: Update, repository: Sulf
                 value = settings.alkalineDir.orEmpty(),
                 onValueChange = { dir -> update { it.copy(alkalineDir = dir.ifBlank { null }) } },
                 label = { Text(stringResource(Res.string.settings_alkaline_dir)) },
-                supportingText = {
-                    Text(
-                        stringResource(
-                            when {
-                                settings.alkalineDir == null -> Res.string.settings_alkaline_dir_hint
-                                found -> Res.string.settings_alkaline_found
-                                else -> Res.string.settings_alkaline_missing
-                            }
-                        )
-                    )
-                },
+                supportingText = if (settings.alkalineDir != null && !found) {
+                    { Text(stringResource(Res.string.settings_alkaline_missing)) }
+                } else null,
                 isError = !found && settings.alkalineDir != null,
                 singleLine = true,
                 modifier = Modifier.weight(1f),

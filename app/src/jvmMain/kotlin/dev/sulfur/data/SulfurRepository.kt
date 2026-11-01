@@ -293,6 +293,9 @@ class SulfurRepository(
 
     suspend fun searchMods(query: ModQuery): ModPage = core.searchMods(query)
 
+    /** Categories a search for [kind] can narrow to, by their Modrinth names. */
+    fun modCategories(kind: ProjectKind): List<String> = core.modCategories(kind)
+
     /** Installs a project (and a mod's dependencies); returns the new file names. */
     suspend fun installMod(project: List<ModRef>, kind: ProjectKind, versionId: String, world: String?): List<String> =
         core.installMod(project, kind, versionId, world)

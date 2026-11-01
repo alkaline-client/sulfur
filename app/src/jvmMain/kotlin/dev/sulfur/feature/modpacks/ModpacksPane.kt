@@ -1,5 +1,6 @@
 package dev.sulfur.feature.modpacks
 
+import dev.sulfur.ui.components.SelectField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +18,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
@@ -218,28 +215,20 @@ private fun PackDialog(
 
 @Composable
 private fun PackVersionPicker(versions: List<ModpackVersion>, chosen: ModpackVersion?, onChoose: (ModpackVersion) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
-        OutlinedTextField(
-            value = chosen?.let { versionLabel(it) }.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            label = { Text(stringResource(Res.string.modpack_version)) },
-            supportingText = chosen?.let { v -> { Text(v.loaders.joinToString(" · ", transform = ::modrinthLoaderName)) } },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(open) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            versions.take(200).forEach { v ->
-                DropdownMenuItem(
-                    text = { Text(versionLabel(v)) },
-                    onClick = {
-                        onChoose(v)
-                        open = false
-                    },
-                )
-            }
+    SelectField(
+        value = chosen?.let { versionLabel(it) }.orEmpty(),
+        label = stringResource(Res.string.modpack_version),
+        modifier = Modifier.fillMaxWidth(),
+        supportingText = chosen?.let { v -> { Text(v.loaders.joinToString(" · ", transform = ::modrinthLoaderName)) } },
+    ) { close ->
+        versions.take(200).forEach { v ->
+            DropdownMenuItem(
+                text = { Text(versionLabel(v)) },
+                onClick = {
+                    onChoose(v)
+                    close()
+                },
+            )
         }
     }
 }
