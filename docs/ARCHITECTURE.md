@@ -8,7 +8,7 @@ user intent. They meet at one narrow, generated boundary.
 ┌──────────────────────── Kotlin (JVM) ────────────────────────┐
 │ ui/ (AppShell, theme)   feature/{launch,download,settings,misc} │
 │        │ StateFlow                     ▲ intents                 │
-│ data/SulfurRepository  ── polls InstallTask / GameSession ──┐   │
+│ data/SulfurRepository  ── polls tasks / GameSession ────────┐   │
 │        │ generated bindings (dev.sulfur.ffi, JNA)           │   │
 └────────┼────────────────────────────────────────────────────┼───┘
          ▼  UniFFI                                            │
@@ -41,7 +41,15 @@ Rules that keep this maintainable:
   only translation layer, so the core can serve a CLI or another UI later.
 - **Long operations are objects, not callbacks.** `InstallTask` and
   `GameSession` expose cheap `snapshot()`/`logs_since()` calls that the UI polls
-  at frame rate. No callbacks into the JVM, no cross-thread re-entrancy.
+  at frame rate. No callbacks into the JVM, no cross-thread re-entrancy. The
+  core keeps every task of the session, including the ones it starts itself
+  for Play (a Java download, an Alkaline build), and the UI reads them all
+  with `install_snapshots()` for its task list.
+- **One corner scale.** `ui/theme/Theme.kt` builds Material's shape scale from
+  the Corners setting, and `Corners` names the role of each surface (page,
+  card, item, inset, logo). Pages use those roles rather than
+  `MaterialTheme.shapes` or their own `RoundedCornerShape`, so one setting
+  rounds the whole UI, the Windows 11 window frame included.
 - **One Tokio runtime**, owned by `SulfurCore`. Async FFI methods spawn onto
   it and are awaited as Kotlin `suspend` functions.
 - **Settings are owned by Rust** (`settings.toml`) so every frontend shares

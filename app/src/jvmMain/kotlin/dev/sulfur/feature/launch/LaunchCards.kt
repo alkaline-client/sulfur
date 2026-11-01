@@ -1,6 +1,7 @@
 package dev.sulfur.feature.launch
 
 import androidx.compose.foundation.clickable
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -349,12 +350,12 @@ private fun NewsRow(entry: NewsEntry) {
         runCatching { LocalDate.parse(entry.date).format(NewsDate.withLocale(Locale.getDefault())) }.getOrDefault(entry.date)
     }
     Row(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(enabled = entry.link.isNotBlank()) {
+        Modifier.fillMaxWidth().clip(Corners.item).clickable(enabled = entry.link.isNotBlank()) {
             scope.launch { openUrl(entry.link) }
         }.padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        RemoteImage(entry.imageUrl, Modifier.size(width = 120.dp, height = 68.dp).clip(MaterialTheme.shapes.medium))
+        RemoteImage(entry.imageUrl, Modifier.size(width = 120.dp, height = 68.dp).clip(Corners.item))
         Column(Modifier.weight(1f)) {
             Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(date, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

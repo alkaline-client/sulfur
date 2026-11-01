@@ -1,6 +1,7 @@
 package dev.sulfur.feature.download
 
 import androidx.compose.animation.AnimatedContent
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -48,7 +49,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.SplitButtonDefaults
@@ -86,13 +86,10 @@ import dev.sulfur.data.isRunning
 import dev.sulfur.ffi.Banner
 import dev.sulfur.ffi.GroupKind
 import dev.sulfur.ffi.InstallSnapshot
-import dev.sulfur.ffi.InstallStage
 import dev.sulfur.ffi.RemoteVersion
 import dev.sulfur.ffi.VersionGroup
 import dev.sulfur.resources.Res
-import dev.sulfur.resources.action_cancel_install
 import dev.sulfur.resources.action_close
-import dev.sulfur.resources.action_dismiss
 import dev.sulfur.resources.action_install
 import dev.sulfur.resources.action_install_options
 import dev.sulfur.resources.action_refresh_versions
@@ -119,14 +116,6 @@ import dev.sulfur.resources.ic_inventory_2
 import dev.sulfur.resources.download_section_modpacks
 import dev.sulfur.feature.modpacks.ModpacksViewModel
 import dev.sulfur.feature.modpacks.ModpacksPane
-import dev.sulfur.resources.install_cancelled
-import dev.sulfur.resources.install_done
-import dev.sulfur.resources.install_failed
-import dev.sulfur.resources.install_progress
-import dev.sulfur.resources.install_running
-import dev.sulfur.resources.install_stage_extracting
-import dev.sulfur.resources.install_stage_loader
-import dev.sulfur.resources.install_stage_preparing
 import dev.sulfur.resources.install_with_loader
 import dev.sulfur.resources.installed
 import dev.sulfur.resources.n_installed
@@ -172,7 +161,6 @@ import dev.sulfur.ui.components.Notice
 import dev.sulfur.ui.components.RemoteImage
 import dev.sulfur.ui.components.Logo
 import dev.sulfur.ui.components.minecraftLogo
-import dev.sulfur.ui.components.formatBytes
 import dev.sulfur.ui.components.formatDate
 import dev.sulfur.ui.components.kindLabel
 import dev.sulfur.ui.components.kindShape
@@ -254,10 +242,6 @@ fun DownloadScreen(viewModel: DownloadViewModel, mods: ModsViewModel, modpacks: 
                             }
                         },
                     )
-                }
-
-                installs.forEach { task ->
-                    InstallStrip(task, onCancel = { viewModel.cancel(task.versionId) }, onDismiss = { viewModel.dismiss(task.versionId) })
                 }
 
                 // Every section below starts with the same toolbar (search, then its actions),
@@ -395,7 +379,7 @@ private fun FloatingCard(onEscape: () -> Unit, modifier: Modifier = Modifier, co
                     true
                 } else false
             },
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = Corners.page,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shadowElevation = 8.dp,
     ) { content() }
@@ -479,14 +463,14 @@ private fun GroupCard(
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        shape = Corners.card,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column {
             RemoteImage(
                 url = banner?.previewUrl ?: banner?.imageUrl,
                 placeholder = fill,
-                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(MaterialTheme.shapes.large),
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(Corners.card),
             ) {
                 Text(group.key.takeIf { group.kind == GroupKind.RELEASE || group.kind == GroupKind.UPCOMING } ?: groupTitle(group),
                     style = MaterialTheme.typography.displaySmallEmphasized, color = onFill, maxLines = 1)
@@ -546,7 +530,7 @@ private fun SharedTransitionScope.GroupDetail(
                     true
                 } else false
             },
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = Corners.page,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shadowElevation = 8.dp,
     ) {
@@ -632,7 +616,7 @@ private fun VersionRow(
     Surface(
         onClick = { viewModel.showInstallOptions(version.id) },
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = Corners.item,
         color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -739,66 +723,4 @@ private fun InstallSplitButton(onInstall: () -> Unit, onOptions: () -> Unit) {
             }
         },
     )
-}
-
-/** A running or finished install, one line high. */
-@Composable
-private fun InstallStrip(task: InstallSnapshot, onCancel: () -> Unit, onDismiss: () -> Unit) {
-    val running = task.isRunning
-    val failed = task.stage == InstallStage.FAILED
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = if (failed) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
-    ) {
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(
-                        when (task.stage) {
-                            InstallStage.DONE -> Res.string.install_done
-                            InstallStage.FAILED -> Res.string.install_failed
-                            InstallStage.CANCELLED -> Res.string.install_cancelled
-                            else -> Res.string.install_running
-                        },
-                        task.versionId,
-                    ),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    task.error ?: stageText(task),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                if (running) {
-                    IconButton(onClick = onCancel) { Icon(painterResource(Res.drawable.ic_close), stringResource(Res.string.action_cancel_install)) }
-                } else {
-                    TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_dismiss)) }
-                }
-            }
-            if (running) {
-                val progress by animateFloatAsState(task.fraction.toFloat(), ProgressIndicatorDefaults.ProgressAnimationSpec)
-                LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(end = 8.dp, bottom = 4.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun stageText(task: InstallSnapshot): String = when (task.stage) {
-    InstallStage.PREPARING -> stringResource(Res.string.install_stage_preparing)
-    InstallStage.EXTRACTING -> stringResource(Res.string.install_stage_extracting)
-    InstallStage.LOADER -> stringResource(Res.string.install_stage_loader)
-    InstallStage.DOWNLOADING, InstallStage.DONE -> stringResource(
-        Res.string.install_progress,
-        task.filesDone.toString(),
-        task.filesTotal.toString(),
-        formatBytes(task.bytesDone),
-        formatBytes(task.bytesTotal),
-        formatBytes(task.bytesPerSecond),
-    )
-    else -> ""
 }

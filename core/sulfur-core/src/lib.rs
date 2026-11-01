@@ -11,7 +11,7 @@ pub mod wallpaper;
 pub use accounts::{Accounts, MicrosoftAccount, OfflineAccount, check_offline_name};
 pub use paths::AppDirs;
 pub use settings::{
-    AccountSettings, AppearanceSettings, ColorSource, DownloadSettings, DownloadSource, GameSettings, GarbageCollector, Isolation,
+    AccountSettings, AppearanceSettings, ColorSource, CornerStyle, DownloadSettings, DownloadSource, GameSettings, GarbageCollector, Isolation,
     LaunchColumn, LaunchPageSettings, LaunchSettings, LaunchWidget, ModSettings, NavigationPosition, Settings, SettingsError,
     ThemeMode, VersionSettings, WidgetKind,
 };

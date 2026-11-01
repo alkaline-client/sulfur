@@ -177,7 +177,7 @@ pub async fn install(
 
 /// Unpacks into `<target>.partial`, drops the archive's top folder, then
 /// swaps the result into place so a broken unpack never looks installed.
-fn unpack(archive: &Path, target: &Path, zip: bool) -> Result<()> {
+pub(crate) fn unpack(archive: &Path, target: &Path, zip: bool) -> Result<()> {
     let partial = target.with_extension("partial");
     let _ = std::fs::remove_dir_all(&partial);
     std::fs::create_dir_all(&partial).map_err(|e| McError::io(&partial, e))?;

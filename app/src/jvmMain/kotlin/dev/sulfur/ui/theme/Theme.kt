@@ -1,9 +1,18 @@
 package dev.sulfur.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -13,6 +22,7 @@ import com.materialkolor.Contrast
 import com.materialkolor.DynamicMaterialExpressiveTheme
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
+import dev.sulfur.ffi.CornerStyle
 import dev.sulfur.ffi.ThemeMode
 import dev.sulfur.resources.Res
 import dev.sulfur.resources.google_sans_flex
@@ -40,6 +50,7 @@ fun SulfurTheme(
     theme: ThemeMode,
     seed: Long,
     highContrast: Boolean,
+    corners: CornerStyle,
     content: @Composable () -> Unit,
 ) {
     val dark = when (theme) {
@@ -55,9 +66,63 @@ fun SulfurTheme(
         contrastLevel = if (highContrast) Contrast.High.value else Contrast.Default.value,
         specVersion = ColorSpec.SpecVersion.SPEC_2025,
         typography = sulfurTypography(),
+        shapes = sulfurShapes(corners),
         animate = true,
-        content = content,
+    ) {
+        CompositionLocalProvider(LocalCornerStyle provides corners, content = content)
+    }
+}
+
+/** The corner roundness picked in Settings → Appearance. */
+val LocalCornerStyle = staticCompositionLocalOf { CornerStyle.DEFAULT }
+
+/** How far [style] scales Material's corner radii. */
+fun cornerScale(style: CornerStyle): Float = when (style) {
+    CornerStyle.SQUARE -> 0f
+    CornerStyle.SMALL -> 0.5f
+    CornerStyle.DEFAULT -> 1f
+    CornerStyle.ROUND -> 1.5f
+}
+
+/** Material's shape scale with every radius scaled by [style]. */
+private fun sulfurShapes(style: CornerStyle): Shapes {
+    val scale = cornerScale(style)
+    if (scale == 1f) return Shapes()
+    fun r(dp: Int) = RoundedCornerShape((dp * scale).dp)
+    return Shapes(
+        extraSmall = r(4),
+        small = r(8),
+        medium = r(12),
+        large = r(16),
+        extraLarge = r(28),
+        largeIncreased = r(20),
+        extraLargeIncreased = r(32),
+        extraExtraLarge = r(48),
     )
+}
+
+/**
+ * The one place that says which corner each kind of surface has, so every
+ * page rounds alike and the Corners setting reaches all of them. Pills and
+ * circles (buttons, chips, search fields) stay as Material draws them.
+ */
+object Corners {
+    /** A page, and what floats over one: dialogs, sheets, opened cards. */
+    val page: Shape @Composable @ReadOnlyComposable get() = MaterialTheme.shapes.extraLarge
+
+    /** A card or banner within a page. */
+    val card: Shape @Composable @ReadOnlyComposable get() = MaterialTheme.shapes.large
+
+    /** A row of a list, a thumbnail, a box within a card. */
+    val item: Shape @Composable @ReadOnlyComposable get() = MaterialTheme.shapes.medium
+
+    /** A small picture or code block within a row. */
+    val inset: Shape @Composable @ReadOnlyComposable get() = MaterialTheme.shapes.small
+
+    /** A product logo of [size], rounded like an app icon. */
+    @Composable
+    @ReadOnlyComposable
+    fun logo(size: Dp): Shape = RoundedCornerShape(size / 5 * cornerScale(LocalCornerStyle.current))
 }
 
 /** Weights the type scale uses. */

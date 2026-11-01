@@ -1,6 +1,9 @@
 package dev.sulfur.ui
 
 import androidx.compose.foundation.border
+import androidx.compose.runtime.SideEffect
+import dev.sulfur.ffi.CornerStyle
+import dev.sulfur.ui.theme.LocalCornerStyle
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
@@ -89,6 +92,13 @@ class WindowChrome(private val window: ComposeWindow, private val onClose: () ->
     /** Bounds to go back to after a maximize that Sulfur did itself (Windows). */
     private var restoreBounds: Rectangle? = null
 
+    /** The window's own corners, on Windows 11. */
+    var corners = CornerStyle.DEFAULT
+        set(value) {
+            field = value
+            if (IsWindows && window.isDisplayable) roundWindowsCorners(window, value)
+        }
+
     private val stateListener = WindowStateListener { event ->
         if (restoreBounds == null) maximized = event.newState and Frame.MAXIMIZED_BOTH == Frame.MAXIMIZED_BOTH
     }
@@ -99,11 +109,10 @@ class WindowChrome(private val window: ComposeWindow, private val onClose: () ->
             window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
             window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
         }
-        if (IsWindows) {
+        if (IsWindows && !window.isDisplayable) {
             // The native handle exists once the window is shown.
-            if (window.isDisplayable) roundWindowsCorners(window)
-            else window.addWindowListener(object : WindowAdapter() {
-                override fun windowOpened(e: WindowEvent) = roundWindowsCorners(window)
+            window.addWindowListener(object : WindowAdapter() {
+                override fun windowOpened(e: WindowEvent) = roundWindowsCorners(window, corners)
             })
         }
         window.addWindowStateListener(stateListener)
@@ -258,6 +267,8 @@ val LocalWindowChrome = staticCompositionLocalOf<WindowChrome?> { null }
 fun WindowFrame(window: ComposeWindow, onClose: () -> Unit, content: @Composable () -> Unit) {
     val chrome = remember(window) { WindowChrome(window, onClose) }
     DisposableEffect(chrome) { onDispose { chrome.dispose() } }
+    val corners = LocalCornerStyle.current
+    SideEffect { chrome.corners = corners }
     CompositionLocalProvider(LocalWindowChrome provides chrome) {
         Box(Modifier.fillMaxSize()) {
             content()
@@ -401,12 +412,17 @@ private fun WindowButton(
     }
 }
 
-/** Rounded corners for the undecorated window on Windows 11 (ignored on Windows 10). */
-private fun roundWindowsCorners(window: ComposeWindow) {
+/** Windows 11's corners for the undecorated window, following the Corners setting (ignored on Windows 10). */
+private fun roundWindowsCorners(window: ComposeWindow, style: CornerStyle) {
+    val preference = when (style) {
+        CornerStyle.SQUARE -> DWMWCP_DONOTROUND
+        CornerStyle.SMALL -> DWMWCP_ROUNDSMALL
+        CornerStyle.DEFAULT, CornerStyle.ROUND -> DWMWCP_ROUND
+    }
     runCatching {
         val hwnd = Native.getComponentPointer(window) ?: return
         val dwm = Native.load("dwmapi", Dwm::class.java)
-        dwm.DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, IntByReference(DWMWCP_ROUND), 4)
+        dwm.DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, IntByReference(preference), 4)
     }
 }
 
@@ -416,12 +432,17 @@ private interface Dwm : Library {
 }
 
 private const val DWMWA_WINDOW_CORNER_PREFERENCE = 33
+private const val DWMWCP_DONOTROUND = 1
 private const val DWMWCP_ROUND = 2
+private const val DWMWCP_ROUNDSMALL = 3
+
+/** Height of [TitleStrip]. */
+val TitleStripHeight = 40.dp
 
 /** A thin title bar for layouts without a top bar: drag area and window buttons. */
 @Composable
 fun TitleStrip(modifier: Modifier = Modifier) {
-    WindowTitleBar(modifier.fillMaxWidth().height(40.dp)) {
+    WindowTitleBar(modifier.fillMaxWidth().height(TitleStripHeight)) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
             WindowButtons()
         }

@@ -1,7 +1,5 @@
 package dev.sulfur.feature.launch
 
-import dev.sulfur.ui.components.minecraftLogo
-import dev.sulfur.ui.components.loaderLogo
 import dev.sulfur.ui.components.Logo
 import dev.sulfur.ui.components.SideNavItem
 import androidx.compose.material3.TextButton
@@ -134,6 +132,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import java.util.Locale
+import dev.sulfur.ui.components.versionLogo
 
 /** No overrides: the version follows the global settings everywhere. */
 private val NoOverrides = VersionSettings(
@@ -201,7 +200,7 @@ internal fun VersionSettingsPage(
           FilledTonalIconButton(onClick = onBack, shapes = IconButtonDefaults.shapes()) {
               Icon(painterResource(Res.drawable.ic_arrow_back), stringResource(Res.string.action_back))
           }
-          Logo(version.loader?.let(::loaderLogo) ?: minecraftLogo(), 36.dp)
+          Logo(versionLogo(version), 36.dp)
           Column(Modifier.weight(1f)) {
               Text(
                   stringResource(Res.string.launch_version_settings),
@@ -214,7 +213,8 @@ internal fun VersionSettingsPage(
       Spacer(Modifier.height(12.dp))
       Row(Modifier.weight(1f)) {
         Column(Modifier.width(200.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            VersionSection.entries.forEach { item ->
+            // Alkaline takes plugins, which it manages itself, not mods.
+            VersionSection.entries.filter { it != VersionSection.Mods || !version.alkaline }.forEach { item ->
                 SideNavItem(stringResource(item.title), item.icon, selected = item == section, onClick = { section = item })
             }
             Spacer(Modifier.weight(1f))
@@ -252,24 +252,28 @@ internal fun VersionSettingsPage(
 private fun GeneralSection(version: InstalledVersion, repository: SulfurRepository, draft: VersionSettings, global: Settings, edit: Edit) {
     SectionCard(stringResource(Res.string.launch_saves_mods), icon = painterResource(Res.drawable.ic_folder_open)) {
         VersionFacts(version)
-        // Isolation is stored apart from the other overrides and applies at once.
-        ConnectedChoice(
-            options = listOf(null, Isolation.ISOLATED, Isolation.SHARED),
-            selected = if (version.isolationOverridden) version.isolation else null,
-            label = {
-                stringResource(
-                    when (it) {
-                        null -> Res.string.version_global
-                        Isolation.ISOLATED -> Res.string.isolation_isolated
-                        Isolation.SHARED -> Res.string.isolation_shared
-                    }
-                )
-            },
-            onSelect = { repository.setVersionIsolation(version.id, it) },
-        )
-        Hint(stringResource(if (version.isolation == Isolation.ISOLATED) Res.string.isolation_isolated_hint else Res.string.isolation_shared_hint))
+        // Alkaline keeps its own data in its own folder.
+        if (!version.alkaline) {
+            // Isolation is stored apart from the other overrides and applies at once.
+            ConnectedChoice(
+                options = listOf(null, Isolation.ISOLATED, Isolation.SHARED),
+                selected = if (version.isolationOverridden) version.isolation else null,
+                label = {
+                    stringResource(
+                        when (it) {
+                            null -> Res.string.version_global
+                            Isolation.ISOLATED -> Res.string.isolation_isolated
+                            Isolation.SHARED -> Res.string.isolation_shared
+                        }
+                    )
+                },
+                onSelect = { repository.setVersionIsolation(version.id, it) },
+            )
+            Hint(stringResource(if (version.isolation == Isolation.ISOLATED) Res.string.isolation_isolated_hint else Res.string.isolation_shared_hint))
+        }
     }
-    SectionCard(stringResource(Res.string.version_window), icon = painterResource(Res.drawable.ic_window_maximize)) {
+    // Alkaline remembers its own window.
+    if (!version.alkaline) SectionCard(stringResource(Res.string.version_window), icon = painterResource(Res.drawable.ic_window_maximize)) {
         DefaultOrChoice(
             value = draft.fullscreen,
             on = stringResource(Res.string.settings_fullscreen),
@@ -382,10 +386,10 @@ private fun DefaultOrChoice(value: Boolean?, on: String, off: String, onSelect: 
 private fun VersionFacts(version: InstalledVersion) {
     val scope = rememberCoroutineScope()
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        version.loader?.let { loader ->
+        (if (version.alkaline) "Alkaline" else version.loader?.let(::loaderName))?.let { name ->
             AssistChip(
                 onClick = {},
-                label = { Text("${loaderName(loader)} · ${version.gameVersion}") },
+                label = { Text("$name · ${version.gameVersion}") },
                 leadingIcon = { Icon(painterResource(Res.drawable.ic_extension), null, Modifier.size(18.dp)) },
             )
         }

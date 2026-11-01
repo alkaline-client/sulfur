@@ -1,6 +1,7 @@
 package dev.sulfur.ui.components
 
 import androidx.compose.foundation.background
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -74,7 +75,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier) {
                         modifier = Modifier.padding(start = 10.dp),
                     )
                 }
-                is Block.Code -> Surface(shape = MaterialTheme.shapes.small, color = colors.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+                is Block.Code -> Surface(shape = Corners.inset, color = colors.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         block.text,
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),

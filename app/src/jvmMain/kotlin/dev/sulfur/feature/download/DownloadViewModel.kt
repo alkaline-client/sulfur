@@ -154,8 +154,4 @@ class DownloadViewModel(
 
     suspend fun loaderVersions(kind: LoaderKind, gameVersion: String): List<LoaderVersion> =
         repository.loaderVersions(kind, gameVersion)
-
-    fun cancel(versionId: String) = repository.cancelInstall(versionId)
-
-    fun dismiss(versionId: String) = repository.dismissInstall(versionId)
 }

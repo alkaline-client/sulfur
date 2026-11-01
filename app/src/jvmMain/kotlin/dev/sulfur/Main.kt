@@ -49,6 +49,8 @@ import kotlin.system.exitProcess
 class AppContainer(val core: SulfurCore) {
     /** The page shown. */
     val destination = mutableStateOf(Destination.Launch)
+    /** Whether the task list is open over the page. */
+    val tasksOpen = mutableStateOf(false)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val repository = SulfurRepository(core, scope)
     val launch = LaunchViewModel(repository, scope)
@@ -117,6 +119,7 @@ fun main() {
                     theme = settings.theme,
                     seed = seed,
                     highContrast = settings.highContrast,
+                    corners = settings.corners,
                 ) {
                     WindowFrame(window, onClose = quit) {
                         AppShell(app)

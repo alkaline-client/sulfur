@@ -29,9 +29,11 @@ pub enum InstallStage {
     Extracting = 2,
     /// Installing a mod loader on top of the game.
     Loader = 3,
+    /// Building a client from source (Alkaline).
+    Building = 4,
     /// Not set by the installer itself: callers may chain more steps (a loader
     /// after the game), so they report completion.
-    Done = 4,
+    Done = 5,
 }
 
 /// Observable state of a running install, shared with the UI.
@@ -48,6 +50,7 @@ impl InstallMonitor {
             1 => InstallStage::Downloading,
             2 => InstallStage::Extracting,
             3 => InstallStage::Loader,
+            4 => InstallStage::Building,
             _ => InstallStage::Done,
         }
     }

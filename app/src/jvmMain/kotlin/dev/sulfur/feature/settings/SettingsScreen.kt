@@ -1,6 +1,7 @@
 package dev.sulfur.feature.settings
 
 import androidx.compose.animation.core.animateDpAsState
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -213,6 +214,46 @@ import org.jetbrains.compose.resources.StringResource
 import java.io.File
 import java.text.NumberFormat
 import kotlin.math.roundToInt
+import androidx.compose.material3.OutlinedButton
+import dev.sulfur.ffi.CornerStyle
+import dev.sulfur.resources.action_choose_folder
+import dev.sulfur.resources.ic_bolt
+import dev.sulfur.resources.settings_alkaline
+import dev.sulfur.resources.settings_alkaline_about
+import dev.sulfur.resources.settings_alkaline_choose
+import dev.sulfur.resources.settings_alkaline_dir
+import dev.sulfur.resources.settings_alkaline_found
+import dev.sulfur.resources.settings_alkaline_missing
+import dev.sulfur.resources.settings_corners
+import dev.sulfur.resources.settings_corners_default
+import dev.sulfur.resources.settings_corners_hint
+import dev.sulfur.resources.settings_corners_round
+import dev.sulfur.resources.settings_corners_small
+import dev.sulfur.resources.settings_corners_square
+import dev.sulfur.resources.settings_seasonal
+import dev.sulfur.resources.settings_seasonal_hint
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
+import dev.sulfur.ffi.AlkalineRelease
+import dev.sulfur.resources.action_install
+import dev.sulfur.resources.settings_alkaline_check
+import dev.sulfur.resources.settings_alkaline_check_failed
+import dev.sulfur.resources.settings_alkaline_checking
+import dev.sulfur.resources.settings_alkaline_dir_hint
+import dev.sulfur.resources.settings_alkaline_feed
+import dev.sulfur.resources.settings_alkaline_feed_default
+import dev.sulfur.resources.settings_alkaline_feed_hint
+import dev.sulfur.resources.settings_alkaline_installed
+import dev.sulfur.resources.settings_alkaline_latest
+import dev.sulfur.resources.settings_alkaline_latest_date
+import dev.sulfur.resources.settings_alkaline_no_download
+import dev.sulfur.resources.settings_alkaline_no_release
+import dev.sulfur.resources.settings_alkaline_not_installed
+import dev.sulfur.resources.settings_alkaline_notes
+import dev.sulfur.resources.settings_alkaline_update
+import dev.sulfur.ui.components.RefreshButton
+import dev.sulfur.util.openUrl
+import kotlinx.coroutines.delay
 
 private typealias Update = ((Settings) -> Settings) -> Unit
 
@@ -261,6 +302,7 @@ fun SettingsScreen(repository: SulfurRepository, misc: MiscViewModel, themeColor
                     Category.Game -> {
                         GameFolderSection(settings, update)
                         WindowSection(settings, update)
+                        AlkalineSection(settings, update, repository)
                         ImportSection(repository)
                     }
                     Category.Java -> {
@@ -396,6 +438,130 @@ private fun LayoutSection(settings: Settings, update: Update) {
             },
             onSelect = { value -> update { it.copy(navigation = value) } },
         )
+        Label(stringResource(Res.string.settings_corners))
+        ConnectedChoice(
+            options = CornerStyle.entries,
+            selected = settings.corners,
+            label = {
+                stringResource(
+                    when (it) {
+                        CornerStyle.SQUARE -> Res.string.settings_corners_square
+                        CornerStyle.SMALL -> Res.string.settings_corners_small
+                        CornerStyle.DEFAULT -> Res.string.settings_corners_default
+                        CornerStyle.ROUND -> Res.string.settings_corners_round
+                    }
+                )
+            },
+            onSelect = { value -> update { it.copy(corners = value) } },
+        )
+        Hint(stringResource(Res.string.settings_corners_hint))
+        SwitchRow(
+            title = stringResource(Res.string.settings_seasonal),
+            subtitle = stringResource(Res.string.settings_seasonal_hint),
+            checked = settings.seasonal,
+            onChange = { value -> update { it.copy(seasonal = value) } },
+        )
+    }
+}
+
+/**
+ * Alkaline: its newest release, installed or updated from here (Play does
+ * the same by itself), where releases come from, and another folder to use
+ * instead (a client of its own or a source checkout).
+ */
+@Composable
+private fun AlkalineSection(settings: Settings, update: Update, repository: SulfurRepository) {
+    val installed by repository.installed.collectAsState()
+    val installs by repository.installs.collectAsState()
+    val found = installed.any { it.alkaline }
+    val busy = installs.any { it.versionId == "Alkaline" && it.isRunning }
+    val scope = rememberCoroutineScope()
+    var checks by remember { mutableIntStateOf(0) }
+    val initialFeed = remember { settings.alkalineFeed }
+    // Asked again when the feed changes (once typing pauses), on Refresh and after an install.
+    val release by produceState<Result<AlkalineRelease?>?>(null, settings.alkalineFeed, checks, busy) {
+        if (settings.alkalineFeed != initialFeed) delay(600)
+        value = null
+        value = runCatching { repository.alkalineRelease(refresh = checks > 0 || settings.alkalineFeed != initialFeed) }
+    }
+    val chooseTitle = stringResource(Res.string.settings_alkaline_choose)
+    SectionCard(
+        stringResource(Res.string.settings_alkaline),
+        icon = painterResource(Res.drawable.ic_bolt),
+        trailing = {
+            RefreshButton(release == null, stringResource(Res.string.settings_alkaline_check), onClick = { checks++ })
+        },
+    ) {
+        Hint(stringResource(Res.string.settings_alkaline_about))
+        val latest = release?.getOrNull()
+        val current = remember(installed) { repository.alkalineInstalled() }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when {
+                        current != null -> stringResource(Res.string.settings_alkaline_installed, current)
+                        found -> stringResource(Res.string.settings_alkaline_found)
+                        else -> stringResource(Res.string.settings_alkaline_not_installed)
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Hint(
+                    release.let { r ->
+                        when {
+                            r == null -> stringResource(Res.string.settings_alkaline_checking)
+                            r.isFailure -> stringResource(Res.string.settings_alkaline_check_failed, r.exceptionOrNull()?.message.orEmpty())
+                            latest == null -> stringResource(Res.string.settings_alkaline_no_release)
+                            !latest.available -> stringResource(Res.string.settings_alkaline_no_download, latest.version)
+                            latest.published.isNotEmpty() -> stringResource(Res.string.settings_alkaline_latest_date, latest.version, latest.published)
+                            else -> stringResource(Res.string.settings_alkaline_latest, latest.version)
+                        }
+                    }
+                )
+            }
+            if (latest != null && latest.pageUrl.isNotBlank()) {
+                TextButton(onClick = { scope.launch { openUrl(latest.pageUrl) } }) {
+                    Text(stringResource(Res.string.settings_alkaline_notes))
+                }
+            }
+            if (latest != null && latest.available && latest.version != current) {
+                FilledTonalButton(onClick = repository::installAlkaline, enabled = !busy) {
+                    Text(stringResource(if (current == null) Res.string.action_install else Res.string.settings_alkaline_update, latest.version))
+                }
+            }
+        }
+        OutlinedTextField(
+            value = settings.alkalineFeed.orEmpty(),
+            onValueChange = { feed -> update { it.copy(alkalineFeed = feed.ifBlank { null }) } },
+            label = { Text(stringResource(Res.string.settings_alkaline_feed)) },
+            placeholder = { Text(stringResource(Res.string.settings_alkaline_feed_default)) },
+            supportingText = { Text(stringResource(Res.string.settings_alkaline_feed_hint)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = settings.alkalineDir.orEmpty(),
+                onValueChange = { dir -> update { it.copy(alkalineDir = dir.ifBlank { null }) } },
+                label = { Text(stringResource(Res.string.settings_alkaline_dir)) },
+                supportingText = {
+                    Text(
+                        stringResource(
+                            when {
+                                settings.alkalineDir == null -> Res.string.settings_alkaline_dir_hint
+                                found -> Res.string.settings_alkaline_found
+                                else -> Res.string.settings_alkaline_missing
+                            }
+                        )
+                    )
+                },
+                isError = !found && settings.alkalineDir != null,
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(onClick = {
+                chooseFolder(chooseTitle)?.let { dir -> update { it.copy(alkalineDir = dir) } }
+            }) { Text(stringResource(Res.string.action_choose_folder)) }
+        }
     }
 }
 
@@ -407,7 +573,7 @@ private fun BackgroundSection(settings: Settings, update: Update, repository: Su
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val preview by rememberBackgroundImage(settings.backgroundImage, 0f)
             Box(
-                Modifier.size(width = 112.dp, height = 63.dp).clip(MaterialTheme.shapes.medium)
+                Modifier.size(width = 112.dp, height = 63.dp).clip(Corners.item)
                     .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                 contentAlignment = Alignment.Center,
             ) {
@@ -781,7 +947,7 @@ private fun ForeignConfigCard(config: ForeignConfig, onImport: () -> Unit) {
         config.backgroundImage?.let { add("${stringResource(Res.string.settings_background)}: ${File(it).name}") }
         config.language?.let { code -> Languages.firstOrNull { it.first == code }?.let { add("${stringResource(Res.string.settings_language)}: ${it.second}") } }
     }
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

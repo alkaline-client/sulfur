@@ -1,6 +1,7 @@
 package dev.sulfur.ui
 
 import dev.sulfur.feature.download.DownloadSection
+import dev.sulfur.ui.theme.Corners
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
@@ -114,6 +115,8 @@ fun AppShell(app: AppContainer) {
     val installs by app.repository.installs.collectAsState()
     val running = installs.count { it.isRunning }
     val background by rememberBackgroundImage(settings.backgroundImage, settings.backgroundBlur)
+    val today = remember { today() }
+    val occasion = if (settings.seasonal) remember(today) { occasionOn(today) } else null
 
     LaunchedEffect(Unit) {
         app.repository.messages.collect { snackbar.showSnackbar(getString(it.text, *it.args)) }
@@ -130,6 +133,7 @@ fun AppShell(app: AppContainer) {
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+            occasion?.effect?.takeIf { it != SeasonalEffect.Confetti }?.let { SeasonalSky(it) }
             // Over a picture the page turns slightly translucent so the picture shows at its edges.
             val pageColor = MaterialTheme.colorScheme.surface.let { if (background != null) it.copy(alpha = 0.86f) else it }
             WarmUpPages(app, destination)
@@ -138,44 +142,60 @@ fun AppShell(app: AppContainer) {
             }
             when (settings.navigation) {
                 NavigationPosition.TOP -> Column(Modifier.fillMaxSize()) {
-                    TopBar(destination, running, onSelect = { destination = it })
+                    TopBar(destination, running, occasion, onSelect = { destination = it })
                     page(Modifier.weight(1f).fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp))
                 }
                 NavigationPosition.SIDE -> Row(Modifier.fillMaxSize()) {
-                    SideRail(destination, running, onSelect = { destination = it })
+                    SideRail(destination, running, occasion, onSelect = { destination = it })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         TitleStrip()
                         page(Modifier.weight(1f).fillMaxWidth().padding(end = 8.dp, bottom = 8.dp))
                     }
                 }
             }
+            var tasksOpen by app.tasksOpen
+            TasksButton(installs, onClick = { tasksOpen = true })
+            TasksSheet(
+                open = tasksOpen,
+                top = if (settings.navigation == NavigationPosition.TOP) TopBarHeight else TitleStripHeight,
+                tasks = installs,
+                onCancel = app.repository::cancelInstall,
+                onDismiss = app.repository::dismissInstall,
+                onClearFinished = app.repository::dismissFinished,
+                onClose = { tasksOpen = false },
+            )
+            // The sheet closes by itself once its last task is gone.
+            LaunchedEffect(installs.isEmpty()) { if (installs.isEmpty()) tasksOpen = false }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp))
+            if (occasion?.effect == SeasonalEffect.Confetti) SeasonalSky(SeasonalEffect.Confetti)
         }
     }
 }
 
-/** The Sulfur mark with its name, at the start of the navigation. */
+private val TopBarHeight = 72.dp
+
+/** The Sulfur mark with its name (spelled the other way on April Fools' Day), at the start of the navigation. */
 @Composable
-private fun Brand(showName: Boolean) {
+private fun Brand(showName: Boolean, occasion: Occasion?) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(painterResource(Res.drawable.sulfur_logo), contentDescription = "Sulfur", modifier = Modifier.size(32.dp))
         if (showName) {
             Spacer(Modifier.width(10.dp))
-            Text("Sulfur", style = MaterialTheme.typography.titleLargeEmphasized, color = MaterialTheme.colorScheme.onSurface)
+            Text(occasion?.brand ?: "Sulfur", style = MaterialTheme.typography.titleLargeEmphasized, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
 
 /** Page entries in a bar above the page (the default), which is also the window's title bar. */
 @Composable
-private fun TopBar(destination: Destination, running: Int, onSelect: (Destination) -> Unit) {
+private fun TopBar(destination: Destination, running: Int, occasion: Occasion?, onSelect: (Destination) -> Unit) {
     val chrome = LocalWindowChrome.current
-    WindowTitleBar(Modifier.fillMaxWidth().height(72.dp)) {
+    WindowTitleBar(Modifier.fillMaxWidth().height(TopBarHeight)) {
         Row(
             Modifier.fillMaxSize().padding(start = if (chrome?.nativeButtons == true) TrafficLightsWidth else 20.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Brand(showName = true)
+            Brand(showName = true, occasion)
             // The bar's own items, centered between the brand and the window buttons. The
             // ShortNavigationBar container is meant for the full window width.
             Row(
@@ -201,7 +221,7 @@ private fun TopBar(destination: Destination, running: Int, onSelect: (Destinatio
 
 /** Page entries in a navigation rail on the left. */
 @Composable
-private fun SideRail(destination: Destination, running: Int, onSelect: (Destination) -> Unit) {
+private fun SideRail(destination: Destination, running: Int, occasion: Occasion?, onSelect: (Destination) -> Unit) {
     val railState = rememberWideNavigationRailState()
     val expanded = railState.targetValue == WideNavigationRailValue.Expanded
     val scope = rememberCoroutineScope()
@@ -214,7 +234,7 @@ private fun SideRail(destination: Destination, running: Int, onSelect: (Destinat
             val top = if (chrome?.nativeButtons == true) TrafficLightsHeight else 0.dp
             WindowTitleBar {
                 Column(Modifier.padding(start = 20.dp, top = top)) {
-                    Box(Modifier.padding(start = 8.dp, bottom = 8.dp)) { Brand(showName = expanded) }
+                    Box(Modifier.padding(start = 8.dp, bottom = 8.dp)) { Brand(showName = expanded, occasion) }
                     IconButton(onClick = { scope.launch { railState.toggle() } }) {
                         Icon(
                             painterResource(if (expanded) Res.drawable.ic_menu_open else Res.drawable.ic_menu),
@@ -258,7 +278,7 @@ private fun Page(
 ) {
     // The content color is given: over a background picture the page color is translucent,
     // which contentColorFor does not recognize, and text would fall back to black.
-    Surface(modifier = modifier, shape = MaterialTheme.shapes.extraLarge, color = color, contentColor = MaterialTheme.colorScheme.onSurface) {
+    Surface(modifier = modifier, shape = Corners.page, color = color, contentColor = MaterialTheme.colorScheme.onSurface) {
         val motion = MaterialTheme.motionScheme
         AnimatedContent(
             targetState = destination,

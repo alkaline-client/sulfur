@@ -1,6 +1,7 @@
 package dev.sulfur.feature.misc
 
 import androidx.compose.foundation.Image
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -100,7 +101,7 @@ fun MiscScreen(viewModel: MiscViewModel, repository: SulfurRepository) {
 
 @Composable
 private fun About(repository: SulfurRepository) {
-    Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = Corners.card, color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             // The same mark as the title bar and the window icon.
             Image(painterResource(Res.drawable.sulfur_logo), contentDescription = null, modifier = Modifier.size(72.dp))
@@ -183,7 +184,7 @@ private fun LauncherLog(viewModel: MiscViewModel) {
             FilledTonalButton(onClick = viewModel::loadLauncherLog, shapes = ButtonDefaults.shapes()) { Text(stringResource(Res.string.action_reload)) }
         },
     ) {
-        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+        Surface(shape = Corners.item, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
             SelectionContainer {
                 Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()).padding(12.dp)) {
                     if (lines.isEmpty()) Text(stringResource(Res.string.launcher_log_empty), style = MaterialTheme.typography.bodySmall)

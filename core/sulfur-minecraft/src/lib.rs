@@ -11,8 +11,10 @@
 //! * [`omniarchive`]: lost versions preserved by Omniarchive.
 //! * [`region`]: where offline accounts are allowed.
 //! * [`msa`]: Microsoft account sign-in.
+//! * [`alkaline`]: the Alkaline client, found or built and started.
 
 pub mod account;
+pub mod alkaline;
 pub mod assets;
 pub mod banners;
 pub mod groups;

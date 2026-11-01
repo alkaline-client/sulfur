@@ -5,6 +5,7 @@
 //! (`InstallTask`, `GameSession`) that the UI polls.
 
 mod accounts;
+mod alkaline_launch;
 mod error;
 mod modpacks;
 mod mods;
@@ -20,7 +21,7 @@ use sulfur_core::AppDirs;
 use sulfur_download::{DownloadConfig, Downloader};
 use sulfur_download::{CancellationToken, DownloadTask, Progress};
 use sulfur_minecraft::{
-    banners, groups,
+    alkaline, banners, groups,
     install::Installer,
     java, launch,
     layout::{self, GameDir},
@@ -61,6 +62,8 @@ struct State {
     region: Region,
     accounts: Mutex<sulfur_core::Accounts>,
     loader_versions: Mutex<HashMap<(loader::LoaderKind, String), FetchedLoaderVersions>>,
+    /// The newest Alkaline release, once asked for.
+    alkaline_release: Mutex<Option<alkaline::Release>>,
 }
 
 /// Loader versions for one loader and game version, and when they were fetched.
@@ -108,6 +111,7 @@ impl SulfurCore {
                 region: Region::detect(),
                 accounts: Mutex::new(accounts),
                 loader_versions: Mutex::new(HashMap::new()),
+                alkaline_release: Mutex::new(None),
             }),
         }))
     }
@@ -238,7 +242,7 @@ impl SulfurCore {
         if let Some(task) = installs.get(&id).filter(|t| !t.is_finished()) {
             return Ok(task.clone());
         }
-        let task = InstallTask::new(id.clone());
+        let task = InstallTask::new(id.clone(), TaskKind::Game);
         installs.insert(id, task.clone());
         let (state, job) = (self.state.clone(), task.clone());
         self.runtime.spawn(async move {
@@ -406,9 +410,21 @@ impl SulfurCore {
                     isolation: isolation.into(),
                     isolation_overridden: settings.game.version_isolation.contains_key(&id),
                     run_dir: path_string(dir.run_dir(&id, isolation == sulfur_core::Isolation::Isolated)),
+                    alkaline: false,
                     id,
                 })
             })
+            .chain(alkaline::locate(settings.game.alkaline_dir.as_deref()).map(|_| InstalledVersion {
+                id: alkaline::VERSION_ID.into(),
+                kind: "alkaline".into(),
+                java_major: alkaline::JAVA_MAJOR,
+                isolation: Isolation::Isolated,
+                isolation_overridden: false,
+                run_dir: path_string(alkaline::data_dir()),
+                loader: None,
+                game_version: alkaline::GAME_VERSION.into(),
+                alkaline: true,
+            }))
             .collect()
     }
 
@@ -465,7 +481,7 @@ impl SulfurCore {
                 .and_then(|m| m.find(&request.game_version).cloned())
                 .ok_or_else(|| CoreError::NotFound(format!("unknown version {}", request.game_version)))?
         };
-        let task = InstallTask::new(id.clone());
+        let task = InstallTask::new(id.clone(), TaskKind::Game);
         installs.insert(id, task.clone());
 
         let (state, job) = (self.state.clone(), task.clone());
@@ -581,6 +597,28 @@ impl SulfurCore {
         self.state.installs.lock().unwrap().values().cloned().collect()
     }
 
+    /// Every task of this session, newest first: the ones the UI started and
+    /// the ones the core started itself (a Java download or a build for Play).
+    pub fn install_snapshots(&self) -> Vec<InstallSnapshot> {
+        let mut tasks = self.installs();
+        tasks.sort_by_key(|t| std::cmp::Reverse(t.order()));
+        tasks.iter().map(|t| t.snapshot()).collect()
+    }
+
+    pub fn cancel_install(&self, version_id: String) {
+        if let Some(task) = self.state.installs.lock().unwrap().get(&version_id) {
+            task.cancel();
+        }
+    }
+
+    /// Forgets a finished task.
+    pub fn dismiss_install(&self, version_id: String) {
+        let mut installs = self.state.installs.lock().unwrap();
+        if installs.get(&version_id).is_some_and(|t| t.is_finished()) {
+            installs.remove(&version_id);
+        }
+    }
+
     pub async fn detect_java(&self) -> Vec<JavaRuntime> {
         let root = self.state.dirs.java_dir();
         let found = self.runtime.spawn(java::discover_in(runtime::executables(&root))).await.unwrap_or_default();
@@ -609,6 +647,9 @@ impl SulfurCore {
     /// Launches an installed version with the current settings.
     pub async fn launch(&self, version_id: String) -> Result<Arc<GameSession>> {
         let state = self.state.clone();
+        if version_id == alkaline::VERSION_ID {
+            return self.runtime.spawn(async move { state.launch_alkaline().await }).await?;
+        }
         self.runtime
             .spawn(async move {
                 // Offline play outside mainland China needs a Microsoft account that owns the game.
@@ -647,7 +688,7 @@ impl SulfurCore {
                 sulfur_minecraft::install::ensure_natives(&dir, &version, Platform::current())?;
                 let command = launch::build(&dir, &version, &options, Platform::current())?;
                 if !game.pre_launch_command.trim().is_empty() {
-                    pre_launch(&game.pre_launch_command, &version_id, &options).await?;
+                    pre_launch(&game.pre_launch_command, &version_id, &options.run_dir, &options.java, &options.env).await?;
                 }
                 let process = GameProcess::spawn(&command)?;
                 Ok(Arc::new(GameSession { version_id, process }))
@@ -696,8 +737,14 @@ pub(crate) async fn install_job(
 /// Runs the player's pre-launch command through the system shell in the
 /// game's folder and waits for it. It sees the game's environment plus the
 /// `INST_*` variables MultiMC and Prism set, so scripts written for them work.
-async fn pre_launch(command: &str, version_id: &str, options: &launch::LaunchOptions) -> Result<()> {
-    std::fs::create_dir_all(&options.run_dir).map_err(|e| CoreError::Io(format!("{}: {e}", options.run_dir.display())))?;
+async fn pre_launch(
+    command: &str,
+    version_id: &str,
+    run_dir: &std::path::Path,
+    java: &std::path::Path,
+    env: &[(String, String)],
+) -> Result<()> {
+    std::fs::create_dir_all(run_dir).map_err(|e| CoreError::Io(format!("{}: {e}", run_dir.display())))?;
     #[cfg(windows)]
     let mut shell = {
         let mut shell = tokio::process::Command::new("cmd");
@@ -711,13 +758,13 @@ async fn pre_launch(command: &str, version_id: &str, options: &launch::LaunchOpt
         shell
     };
     let status = shell
-        .current_dir(&options.run_dir)
-        .envs(options.env.iter().map(|(k, v)| (k, v)))
+        .current_dir(run_dir)
+        .envs(env.iter().map(|(k, v)| (k, v)))
         .env("INST_NAME", version_id)
         .env("INST_ID", version_id)
-        .env("INST_DIR", &options.run_dir)
-        .env("INST_MC_DIR", &options.run_dir)
-        .env("INST_JAVA", &options.java)
+        .env("INST_DIR", run_dir)
+        .env("INST_MC_DIR", run_dir)
+        .env("INST_JAVA", java)
         .stdin(std::process::Stdio::null())
         .status()
         .await
@@ -861,7 +908,7 @@ impl State {
         if let Some(task) = installs.get(&id).filter(|t| !t.is_finished()) {
             return (task.clone(), false);
         }
-        let task = InstallTask::new(id.clone());
+        let task = InstallTask::new(id.clone(), TaskKind::Java);
         installs.insert(id, task.clone());
         (task, true)
     }

@@ -65,6 +65,25 @@ pub struct AppearanceSettings {
     pub background_blur: f32,
     /// UI language: empty follows the system, else `en`, `zh-CN` or `zh-TW`.
     pub language: String,
+    /// How round every corner in the UI is, the window's included.
+    pub corners: CornerStyle,
+    /// Small touches on special days (Halloween, Christmas, Minecraft's birthday).
+    pub seasonal: bool,
+}
+
+/// One roundness for the whole UI; each step scales the Material shape scale.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CornerStyle {
+    /// Square corners.
+    Square,
+    /// Half the Material radii.
+    Small,
+    /// The Material 3 Expressive radii.
+    #[default]
+    Default,
+    /// One and a half times the Material radii.
+    Round,
 }
 
 /// Where the theme's seed color comes from.
@@ -102,6 +121,8 @@ impl Default for AppearanceSettings {
             background_opacity: 0.6,
             background_blur: 12.0,
             language: String::new(),
+            corners: CornerStyle::Default,
+            seasonal: true,
         }
     }
 }
@@ -192,6 +213,12 @@ pub struct GameSettings {
     pub log4j_fix: bool,
     /// Per-version overrides of the settings above, keyed by version id.
     pub version_settings: BTreeMap<String, VersionSettings>,
+    /// The Alkaline client: its installed folder (with `bin/game-client`) or
+    /// its `legacy` source checkout. `None` looks in the usual places.
+    pub alkaline_dir: Option<PathBuf>,
+    /// Where Alkaline's releases are announced: a feed on Alkaline's own
+    /// server. `None` uses its GitHub releases.
+    pub alkaline_feed: Option<String>,
 }
 
 /// Garbage collector for the game's JVM. Collectors the chosen Java does not
@@ -283,6 +310,8 @@ impl Default for GameSettings {
             auto_java: true,
             log4j_fix: true,
             version_settings: BTreeMap::new(),
+            alkaline_dir: None,
+            alkaline_feed: None,
         }
     }
 }

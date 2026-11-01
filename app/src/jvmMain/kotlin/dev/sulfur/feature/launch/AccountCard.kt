@@ -1,6 +1,7 @@
 package dev.sulfur.feature.launch
 
 import androidx.compose.foundation.Canvas
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -119,7 +120,7 @@ internal fun AccountCard(repository: SulfurRepository) {
     var menuOpen by remember { mutableStateOf(false) }
     val newOffline = { AccountInfo("", AccountKind.OFFLINE, "", null) }
 
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         val current = account
         if (current == null) {
             // Outside mainland China nothing can be played without a Microsoft account.
@@ -267,7 +268,7 @@ internal fun AccountAvatar(account: AccountInfo, size: Dp) {
     val shape = MaterialShapes.Cookie9Sided.toShape()
     val face = skin
     if (face != null) {
-        Canvas(Modifier.size(size).clip(MaterialTheme.shapes.small)) {
+        Canvas(Modifier.size(size).clip(Corners.inset)) {
             val dst = IntSize(this.size.width.toInt(), this.size.height.toInt())
             // The face and the hat layer over it, 8×8 pixels each on a 64-pixel-wide skin.
             val scale = face.width / 64
@@ -432,7 +433,7 @@ private fun DeviceCode(snapshot: SignInSnapshot) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     Text(stringResource(Res.string.signin_instructions, uri), style = MaterialTheme.typography.bodyMedium)
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = Corners.card, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
         SelectionContainer {
             Text(
                 code,

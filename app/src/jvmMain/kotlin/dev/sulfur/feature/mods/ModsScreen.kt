@@ -1,6 +1,7 @@
 package dev.sulfur.feature.mods
 
 import dev.sulfur.resources.ic_arrow_drop_down
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.animation.AnimatedVisibility
@@ -140,14 +141,13 @@ import dev.sulfur.ui.components.ShapeIcon
 import dev.sulfur.ui.components.formatBytes
 import dev.sulfur.ui.components.formatCount
 import dev.sulfur.ui.components.Logo
-import dev.sulfur.ui.components.loaderLogo
 import dev.sulfur.ui.components.loaderName
 import dev.sulfur.ui.components.versionLabel
-import dev.sulfur.ui.components.minecraftLogo
 import dev.sulfur.util.openUrl
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import dev.sulfur.ui.components.versionLogo
 
 /**
  * The Mods & resources section of the Download page: search, install and
@@ -156,7 +156,9 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun ModsPane(viewModel: ModsViewModel, repository: SulfurRepository, modifier: Modifier = Modifier) {
     val ui by viewModel.ui.collectAsState()
-    val installed by repository.installed.collectAsState()
+    val all by repository.installed.collectAsState()
+    // Alkaline takes plugins, not mods.
+    val installed = remember(all) { all.filterNot { it.alkaline } }
     val version = installed.firstOrNull { it.id == ui.versionId }
     val hasModLoader = version?.loader?.let { it != LoaderKind.OPTI_FINE } == true
     val canInstall = when (ui.kind) {
@@ -315,7 +317,6 @@ private fun folderTitle(kind: ProjectKind): StringResource = when (kind) {
 
 private fun sourceName(source: ModSource): String = if (source == ModSource.MODRINTH) "Modrinth" else "CurseForge"
 
-private fun versionLogo(v: InstalledVersion) = v.loader?.let(::loaderLogo) ?: minecraftLogo()
 
 private fun describe(v: InstalledVersion): String = versionLabel(v)
 
@@ -405,7 +406,7 @@ private fun Results(ui: ModsUiState, canInstall: Boolean, viewModel: ModsViewMod
 private fun DownloadListBar(ui: ModsUiState, canInstall: Boolean, viewModel: ModsViewModel) {
     val busy = ui.downloadList.any { it.hit.key in ui.installing }
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = Corners.card,
         color = MaterialTheme.colorScheme.secondaryContainer,
         shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
@@ -473,9 +474,9 @@ internal fun ModRow(
         if (listed) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         MaterialTheme.motionScheme.defaultEffectsSpec(),
     )
-    Surface(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).then(listClick), shape = MaterialTheme.shapes.medium, color = color) {
+    Surface(Modifier.fillMaxWidth().clip(Corners.item).then(listClick), shape = Corners.item, color = color) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            RemoteImage(hit.iconUrl, Modifier.size(48.dp).clip(MaterialTheme.shapes.small)) {
+            RemoteImage(hit.iconUrl, Modifier.size(48.dp).clip(Corners.inset)) {
                 Icon(painterResource(Res.drawable.ic_extension), null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.width(12.dp))

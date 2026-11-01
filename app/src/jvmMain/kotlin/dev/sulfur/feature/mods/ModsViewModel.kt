@@ -92,7 +92,8 @@ class ModsViewModel(
     init {
         // Follow the version picked on the Launch page until the user picks one here.
         scope.launch {
-            repository.installed.collect { list ->
+            repository.installed.collect { all ->
+                val list = all.filterNot { it.alkaline }
                 val current = _ui.value.versionId
                 if (current == null || list.none { it.id == current }) {
                     val preferred = repository.settings.value.selectedVersion

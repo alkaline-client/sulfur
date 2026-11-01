@@ -1,6 +1,7 @@
 package dev.sulfur.data
 
 import dev.sulfur.ffi.AccountInfo
+import dev.sulfur.ffi.AlkalineRelease
 import dev.sulfur.ffi.AccountKind
 import dev.sulfur.ffi.AccountPolicy
 import dev.sulfur.ffi.ArchivedVersion
@@ -31,9 +32,11 @@ import dev.sulfur.ffi.ProjectKind
 import dev.sulfur.ffi.Settings
 import dev.sulfur.ffi.SignInTask
 import dev.sulfur.ffi.SulfurCore
+import dev.sulfur.ffi.TaskKind
 import dev.sulfur.ffi.VersionList
 import dev.sulfur.ffi.VersionSettings
 import dev.sulfur.resources.Res
+import dev.sulfur.resources.msg_build_ready
 import dev.sulfur.resources.msg_error
 import dev.sulfur.resources.msg_install_failed
 import dev.sulfur.resources.msg_install_ready
@@ -102,14 +105,16 @@ class SulfurRepository(
     val installed: StateFlow<List<InstalledVersion>> = _installed.asStateFlow()
 
     private val _installs = MutableStateFlow<List<InstallSnapshot>>(emptyList())
-    /** Installs started this session, newest first, refreshed ~10 times per second. */
+    /**
+     * Every task of this session, newest first, refreshed ~10 times per second
+     * while one runs: installs started here and the ones the core starts for
+     * Play (a Java download, building Alkaline).
+     */
     val installs: StateFlow<List<InstallSnapshot>> = _installs.asStateFlow()
 
     private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 16)
     /** One-off user-facing messages (shown as snackbars). */
     val messages: SharedFlow<UiMessage> = _messages
-
-    private val tasks = LinkedHashMap<String, InstallTask>()
 
     init {
         refreshInstalled()
@@ -177,20 +182,12 @@ class SulfurRepository(
 
     fun install(request: InstallRequest) = start { core.installVersion(request) }
 
-    /** Starts a core install and follows its progress; refusals are shown as messages. */
+    /** Starts a core install, which the task list follows; refusals are shown as messages. */
     private fun start(begin: () -> InstallTask) {
         try {
-            track(begin())
+            begin().close()
         } catch (e: CoreException) {
             notifyError(e)
-        }
-    }
-
-    private fun track(task: InstallTask) {
-        val id = task.versionId()
-        synchronized(tasks) {
-            tasks.remove(id)
-            tasks[id] = task
         }
     }
 
@@ -222,13 +219,15 @@ class SulfurRepository(
         refreshInstalled()
     }
 
-    fun cancelInstall(versionId: String) {
-        synchronized(tasks) { tasks[versionId] }?.cancel()
-    }
+    fun cancelInstall(versionId: String) = core.cancelInstall(versionId)
 
     fun dismissInstall(versionId: String) {
-        synchronized(tasks) { tasks.remove(versionId) }?.close()
+        core.dismissInstall(versionId)
+        _installs.update { list -> list.filterNot { it.versionId == versionId && !it.isRunning } }
     }
+
+    /** Forgets every finished task. */
+    fun dismissFinished() = _installs.value.filterNot { it.isRunning }.forEach { dismissInstall(it.versionId) }
 
     suspend fun launch(versionId: String): GameSession {
         // The account and its name may have changed within the save delay.
@@ -273,11 +272,24 @@ class SulfurRepository(
 
     suspend fun detectJava(): List<JavaRuntime> = core.detectJava()
 
+    /** The newest Alkaline release and the one installed, or null while Alkaline has none. */
+    suspend fun alkalineRelease(refresh: Boolean): AlkalineRelease? {
+        // A feed address typed a moment ago may not be saved yet.
+        if (refresh) withContext(Dispatchers.IO) { core.updateSettings(_settings.value) }
+        return core.alkalineRelease(refresh)
+    }
+
+    /** The Alkaline release Sulfur installed, if any. */
+    fun alkalineInstalled(): String? = core.alkalineInstalled()
+
+    /** Downloads the newest Alkaline release; progress shows with the installs. */
+    fun installAlkaline() = core.installAlkaline().close()
+
     /** Java major versions Sulfur can download. */
     val downloadableJava: List<UInt> = core.downloadableJava()
 
     /** Downloads a Java runtime; progress shows with the installs. */
-    fun installJava(major: UInt) = track(core.installJava(major))
+    fun installJava(major: UInt) = core.installJava(major).close()
 
     suspend fun searchMods(query: ModQuery): ModPage = core.searchMods(query)
 
@@ -300,8 +312,9 @@ class SulfurRepository(
     private suspend fun persistSettings() {
         var saved = _settings.value
         settings.drop(1).debounce(400).collect { value ->
-            // Reading every installed version is only needed when where they live changed.
-            val moved = value.gameDir != saved.gameDir || value.isolation != saved.isolation
+            // Reading every installed version is only needed when where they (or Alkaline) live changed.
+            val moved = value.gameDir != saved.gameDir || value.isolation != saved.isolation ||
+                value.alkalineDir != saved.alkalineDir
             saved = value
             runCatching { withContext(Dispatchers.IO) { core.updateSettings(value) } }
                 .onSuccess { if (moved) refreshInstalled() }
@@ -312,14 +325,21 @@ class SulfurRepository(
     private suspend fun pollInstalls() {
         val finished = HashSet<String>()
         while (scope.isActive) {
-            val snapshots = synchronized(tasks) { tasks.values.toList() }.map { it.snapshot() }.reversed()
+            val snapshots = withContext(Dispatchers.IO) { core.installSnapshots() }
             _installs.value = snapshots
             for (s in snapshots) {
                 val done = s.stage == InstallStage.DONE || s.stage == InstallStage.FAILED || s.stage == InstallStage.CANCELLED
                 if (done && finished.add(s.versionId)) {
                     when (s.stage) {
                         InstallStage.DONE -> notify(
-                            UiMessage(if (s.isJava) Res.string.msg_java_ready else Res.string.msg_install_ready, s.versionId)
+                            UiMessage(
+                                when (s.kind) {
+                                    TaskKind.JAVA -> Res.string.msg_java_ready
+                                    TaskKind.BUILD -> Res.string.msg_build_ready
+                                    else -> Res.string.msg_install_ready
+                                },
+                                s.versionId,
+                            )
                         )
                         InstallStage.FAILED -> notify(UiMessage(Res.string.msg_install_failed, s.versionId, s.error.orEmpty()))
                         else -> {}
@@ -336,9 +356,9 @@ class SulfurRepository(
 }
 
 /** Whether this is a Java download rather than a game install. */
-val InstallSnapshot.isJava: Boolean get() = versionId.startsWith("Java ")
+val InstallSnapshot.isJava: Boolean get() = kind == TaskKind.JAVA
 
 /** Whether an install is still working. */
 val InstallSnapshot.isRunning: Boolean
     get() = stage == InstallStage.PREPARING || stage == InstallStage.DOWNLOADING ||
-        stage == InstallStage.EXTRACTING || stage == InstallStage.LOADER
+        stage == InstallStage.EXTRACTING || stage == InstallStage.LOADER || stage == InstallStage.BUILDING

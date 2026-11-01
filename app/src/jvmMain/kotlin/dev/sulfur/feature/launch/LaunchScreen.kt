@@ -1,6 +1,7 @@
 package dev.sulfur.feature.launch
 
 import dev.sulfur.ffi.ProjectKind
+import dev.sulfur.ui.theme.Corners
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
@@ -103,12 +104,11 @@ import dev.sulfur.ui.components.PagePadding
 import dev.sulfur.ui.components.SectionCard
 import dev.sulfur.ui.components.ShapeIcon
 import dev.sulfur.ui.components.Logo
-import dev.sulfur.ui.components.loaderLogo
 import dev.sulfur.ui.components.loaderName
 import dev.sulfur.ui.components.versionLabel
-import dev.sulfur.ui.components.minecraftLogo
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import dev.sulfur.ui.components.versionLogo
 
 @Composable
 fun LaunchScreen(
@@ -271,7 +271,7 @@ private fun PlayButton(
                     installed.forEach { v ->
                         DropdownMenuItem(
                             text = { Text(versionLabel(v)) },
-                            leadingIcon = { Logo(v.loader?.let(::loaderLogo) ?: minecraftLogo(), 24.dp) },
+                            leadingIcon = { Logo(versionLogo(v), 24.dp) },
                             trailingIcon = if (v.id == selected?.id) {
                                 { Icon(painterResource(Res.drawable.ic_check), null) }
                             } else null,
@@ -351,7 +351,7 @@ private fun StatusRow(
     action: @Composable () -> Unit = {},
 ) {
     Surface(
-        shape = MaterialTheme.shapes.large,
+        shape = Corners.card,
         color = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -386,7 +386,7 @@ private fun OutputDialog(lines: List<String>, onDismiss: () -> Unit) {
                 if (lines.isNotEmpty()) listState.scrollToItem(lines.lastIndex)
             }
             Surface(
-                shape = MaterialTheme.shapes.medium,
+                shape = Corners.item,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 modifier = Modifier.width(720.dp).height(420.dp),
             ) {

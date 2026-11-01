@@ -13,7 +13,7 @@ use sulfur_mods::{ModsClient, Query, mrpack::PackIndex};
 
 use crate::{
     CoreError, InstallTask, LoaderKind, ModPage, ModSort, ModpackInfo, ModpackVersion, Result, State, SulfurCore,
-    install_job,
+    TaskKind, install_job,
 };
 
 /// Search page size.
@@ -101,7 +101,7 @@ impl SulfurCore {
         }
         // Only a folder this install creates is removed if it fails.
         let fresh = !dir.version_dir(&name).exists();
-        let task = InstallTask::new(name.clone());
+        let task = InstallTask::new(name.clone(), TaskKind::Modpack);
         installs.insert(name.clone(), task.clone());
         let (state, job) = (self.state.clone(), task.clone());
         self.runtime.spawn(async move {

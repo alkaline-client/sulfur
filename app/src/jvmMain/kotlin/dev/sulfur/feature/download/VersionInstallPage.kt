@@ -1,6 +1,7 @@
 package dev.sulfur.feature.download
 
 import androidx.compose.animation.AnimatedContent
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -373,7 +374,7 @@ private fun LoaderTile(
     Surface(
         onClick = onClick,
         enabled = available,
-        shape = MaterialTheme.shapes.large,
+        shape = Corners.card,
         color = container,
         border = if (selected) BorderStroke(2.dp, colors.primary) else null,
         modifier = modifier,

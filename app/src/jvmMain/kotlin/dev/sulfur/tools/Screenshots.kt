@@ -26,6 +26,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.skia.EncodedImageFormat
 import java.io.File
 import kotlin.system.exitProcess
+import dev.sulfur.ffi.CornerStyle
 
 /**
  * Renders pages off-screen into PNGs, without a display.
@@ -61,6 +62,8 @@ private suspend fun render(args: Array<String>) {
         /** Time for loads the shot starts (loader versions) before its last frames. */
         val settleMillis: Long = 0,
         val width: Int = 1280,
+        /** The day the shot pretends it is, for seasonal touches. */
+        val date: String? = null,
         val setup: () -> Unit = {},
     )
     val newestRelease = { app.download.ui.value.groups.firstOrNull { it.releases.isNotEmpty() } }
@@ -189,6 +192,38 @@ private suspend fun render(args: Array<String>) {
         Shot("launch-cards-zh-cn", Destination.Launch, ThemeMode.LIGHT) {
             app.repository.updateSettings { it.copy(launchWidgets = sampleCards, language = "zh-CN") }
         } +
+        // The task list over the page.
+        Shot("tasks-light", Destination.Launch, ThemeMode.LIGHT, settleMillis = 2_500) {
+            app.repository.installJava(17u)
+            app.repository.install("1.8.9")
+            app.tasksOpen.value = true
+        } +
+        Shot("tasks-button-dark", Destination.Download, ThemeMode.DARK, settleMillis = 2_500) {
+            app.repository.install("1.8.9")
+        } +
+        // Alkaline's own settings page (it shows when Sulfur finds the client).
+        Shot("launch-alkaline-light", Destination.Launch, ThemeMode.LIGHT) {
+            app.launch.select("Alkaline")
+            app.launch.versionSettingsOpen.value = true
+        } +
+        Shot("settings-corners-square-light", Destination.Settings, ThemeMode.LIGHT) {
+            app.repository.updateSettings { it.copy(corners = CornerStyle.SQUARE) }
+        } +
+        Shot("launch-corners-round-dark", Destination.Launch, ThemeMode.DARK) {
+            app.repository.updateSettings { it.copy(corners = CornerStyle.ROUND) }
+        } +
+        Shot("halloween-light", Destination.Launch, ThemeMode.LIGHT, date = "2026-10-31", settleMillis = 3_000) {
+            app.repository.updateSettings { it.copy(navigation = NavigationPosition.TOP) }
+        } +
+        Shot("christmas-dark", Destination.Launch, ThemeMode.DARK, date = "2026-12-25") {
+            app.repository.updateSettings { it.copy(navigation = NavigationPosition.TOP) }
+        } +
+        Shot("new-year-light", Destination.Launch, ThemeMode.LIGHT, date = "2027-01-01") {
+            app.repository.updateSettings { it.copy(navigation = NavigationPosition.TOP) }
+        } +
+        Shot("april-fools-light", Destination.Launch, ThemeMode.LIGHT, date = "2027-04-01") {
+            app.repository.updateSettings { it.copy(navigation = NavigationPosition.TOP) }
+        } +
         inLanguage("launch-zh-cn", Destination.Launch, "zh-CN") +
         inLanguage("download-zh-cn", Destination.Download, "zh-CN") +
         inLanguage("settings-zh-cn", Destination.Settings, "zh-CN") +
@@ -207,12 +242,14 @@ private suspend fun render(args: Array<String>) {
         while (app.download.ui.value.banners.isEmpty() && app.download.ui.value.error == null) delay(100)
     }
 
+    val corners = app.repository.settings.value.corners
     for (shot in shots) {
         app.destination.value = shot.page
+        if (shot.date != null) System.setProperty("sulfur.date", shot.date) else System.clearProperty("sulfur.date")
         val scene = ImageComposeScene(width = shot.width, height = 820, density = Density(1f)) {
             val settings by app.repository.settings.collectAsState()
             LocalizedApp(settings.language) {
-                SulfurTheme(shot.theme, settings.seedColor.toLong(), settings.highContrast) {
+                SulfurTheme(shot.theme, settings.seedColor.toLong(), settings.highContrast, settings.corners) {
                     AppShell(app)
                 }
             }
@@ -250,8 +287,15 @@ private suspend fun render(args: Array<String>) {
         app.modpacks.close()
         app.launch.customizing.value = false
         app.launch.versionSettingsOpen.value = false
+        app.tasksOpen.value = false
         app.repository.updateSettings {
-            it.copy(navigation = navigation, language = language, launchColumn = launchPage.first, launchWidgets = launchPage.second)
+            it.copy(
+                navigation = navigation,
+                language = language,
+                launchColumn = launchPage.first,
+                launchWidgets = launchPage.second,
+                corners = corners,
+            )
         }
     }
     app.close()

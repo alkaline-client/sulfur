@@ -28,6 +28,15 @@ pub enum NavigationPosition {
     Side,
 }
 
+/// How round the UI's corners are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum CornerStyle {
+    Square,
+    Small,
+    Default,
+    Round,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum Isolation {
     Isolated,
@@ -92,6 +101,10 @@ pub struct Settings {
     pub background_blur: f32,
     /// UI language: empty follows the system, else `en`, `zh-CN` or `zh-TW`.
     pub language: String,
+    /// One roundness for every corner, the window's included.
+    pub corners: CornerStyle,
+    /// Small touches on special days.
+    pub seasonal: bool,
     pub download_source: DownloadSource,
     pub max_connections: u32,
     pub segments_per_file: u32,
@@ -127,6 +140,10 @@ pub struct Settings {
     pub curseforge_api_key: String,
     /// Download Cleanroom without its download page.
     pub cleanroom_direct: bool,
+    /// Alkaline's client folder or source checkout; `None` looks in the usual places.
+    pub alkaline_dir: Option<String>,
+    /// The address of Alkaline's release feed; `None` uses its GitHub releases.
+    pub alkaline_feed: Option<String>,
     /// Side of the Launch page the account and Play button sit on.
     pub launch_column: LaunchColumn,
     pub launch_widgets: Vec<LaunchWidget>,
@@ -386,6 +403,8 @@ pub struct InstalledVersion {
     pub loader: Option<LoaderKind>,
     /// The vanilla version this one is based on (its own id for vanilla).
     pub game_version: String,
+    /// The Alkaline client rather than a version of the game.
+    pub alkaline: bool,
 }
 
 #[derive(Clone, Debug, uniffi::Record)]
@@ -415,14 +434,43 @@ pub enum InstallStage {
     Extracting,
     /// Installing a mod loader.
     Loader,
+    /// Building a client from source.
+    Building,
     Done,
     Failed,
     Cancelled,
 }
 
+/// The newest release of Alkaline and what is installed.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct AlkalineRelease {
+    pub version: String,
+    /// Release notes, in Markdown.
+    pub notes: String,
+    /// `YYYY-MM-DD`, or empty.
+    pub published: String,
+    pub page_url: String,
+    /// Whether the release has a download for this system.
+    pub available: bool,
+}
+
+/// What a task installs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum TaskKind {
+    /// A game version, with its mod loader if any.
+    Game,
+    /// A modpack, installed as a version of its own.
+    Modpack,
+    /// A Java runtime; the task is keyed `Java <major>`.
+    Java,
+    /// A client built from source (Alkaline).
+    Build,
+}
+
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct InstallSnapshot {
     pub version_id: String,
+    pub kind: TaskKind,
     pub stage: InstallStage,
     pub files_total: u64,
     pub files_done: u64,
@@ -433,6 +481,8 @@ pub struct InstallSnapshot {
     pub bytes_per_second: f64,
     /// Completion in `0.0..=1.0`.
     pub fraction: f64,
+    /// What the task is doing now, beyond its stage (a build's output).
+    pub detail: Option<String>,
     pub error: Option<String>,
 }
 
@@ -600,6 +650,13 @@ impl From<&core::Settings> for Settings {
             background_opacity: s.appearance.background_opacity,
             background_blur: s.appearance.background_blur,
             language: s.appearance.language.clone(),
+            corners: match s.appearance.corners {
+                core::CornerStyle::Square => CornerStyle::Square,
+                core::CornerStyle::Small => CornerStyle::Small,
+                core::CornerStyle::Default => CornerStyle::Default,
+                core::CornerStyle::Round => CornerStyle::Round,
+            },
+            seasonal: s.appearance.seasonal,
             download_source: download_source_out(s.download.source),
             max_connections: s.download.max_connections,
             segments_per_file: s.download.segments_per_file,
@@ -626,6 +683,8 @@ impl From<&core::Settings> for Settings {
             selected_account: s.account.selected.clone(),
             curseforge_api_key: s.mods.curseforge_api_key.clone(),
             cleanroom_direct: s.mods.cleanroom_direct,
+            alkaline_dir: s.game.alkaline_dir.clone().map(path_string),
+            alkaline_feed: s.game.alkaline_feed.clone(),
             launch_column: match s.launch_page.column {
                 core::LaunchColumn::Left => LaunchColumn::Left,
                 core::LaunchColumn::Right => LaunchColumn::Right,
@@ -661,6 +720,13 @@ impl Settings {
             "en" | "zh-CN" | "zh-TW" => self.language,
             _ => String::new(),
         };
+        target.appearance.corners = match self.corners {
+            CornerStyle::Square => core::CornerStyle::Square,
+            CornerStyle::Small => core::CornerStyle::Small,
+            CornerStyle::Default => core::CornerStyle::Default,
+            CornerStyle::Round => core::CornerStyle::Round,
+        };
+        target.appearance.seasonal = self.seasonal;
         target.download.source = download_source_in(self.download_source);
         target.download.max_connections = self.max_connections.clamp(1, 512);
         target.download.segments_per_file = self.segments_per_file.clamp(1, 32);
@@ -688,6 +754,8 @@ impl Settings {
         target.account.selected = self.selected_account;
         target.mods.curseforge_api_key = self.curseforge_api_key.trim().to_owned();
         target.mods.cleanroom_direct = self.cleanroom_direct;
+        target.game.alkaline_dir = non_empty(self.alkaline_dir);
+        target.game.alkaline_feed = self.alkaline_feed.map(|f| f.trim().to_owned()).filter(|f| !f.is_empty());
         target.launch_page.column = match self.launch_column {
             LaunchColumn::Left => core::LaunchColumn::Left,
             LaunchColumn::Right => core::LaunchColumn::Right,

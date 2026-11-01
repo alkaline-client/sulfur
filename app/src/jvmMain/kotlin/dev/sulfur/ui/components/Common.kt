@@ -1,6 +1,7 @@
 package dev.sulfur.ui.components
 
 import androidx.compose.ui.text.style.TextOverflow
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.foundation.layout.height
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -31,7 +32,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
@@ -92,6 +92,7 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import dev.sulfur.resources.logo_alkaline
 
 /** Horizontal padding of every page. */
 val PagePadding = 20.dp
@@ -110,7 +111,7 @@ fun SectionCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
+        shape = Corners.card,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -194,7 +195,7 @@ fun Notice(
     iconTint: Color = content,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = container, contentColor = content) {
+    Surface(modifier.fillMaxWidth(), shape = Corners.card, color = container, contentColor = content) {
         Row(
             Modifier.heightIn(min = 48.dp).padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -405,6 +406,12 @@ fun loaderLogo(kind: LoaderKind): DrawableResource = when (kind) {
     LoaderKind.CLEANROOM -> Res.drawable.logo_cleanroom
 }
 
+/** The logo of an installed version: its loader's, Alkaline's, or Minecraft's. */
+fun versionLogo(v: InstalledVersion): DrawableResource = when {
+    v.alkaline -> Res.drawable.logo_alkaline
+    else -> v.loader?.let(::loaderLogo) ?: minecraftLogo()
+}
+
 /** Minecraft's own window icon: the grass block, or the dirt block of snapshots. */
 fun minecraftLogo(kind: VersionKind = VersionKind.RELEASE): DrawableResource =
     if (kind == VersionKind.SNAPSHOT) Res.drawable.logo_minecraft_snapshot else Res.drawable.logo_minecraft
@@ -416,7 +423,7 @@ fun Logo(resource: DrawableResource, size: Dp, modifier: Modifier = Modifier, co
         imageResource(resource),
         contentDescription = contentDescription,
         filterQuality = FilterQuality.High,
-        modifier = modifier.size(size).clip(RoundedCornerShape(size / 5)),
+        modifier = modifier.size(size).clip(Corners.logo(size)),
     )
 }
 

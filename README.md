@@ -62,13 +62,28 @@ with Google's **Material 3 Expressive** components.
 - **Comes with you from HMCL and PCL.** Settings → Game imports game folders,
   memory, window, Java, download and isolation settings from HMCL (3.16+ and
   older `hmcl.json`), PCL Community Edition and PCL2.
+- **Every download in one place.** A button at the corner of every page
+  shows how far the running tasks are; it opens the task list with each
+  install, Java download and build, its stage, files, speed and time left.
+- **Plays Alkaline.** The Alkaline 1.8.9 PvP client shows up with your
+  versions. Play installs its newest release (from its GitHub releases, or a
+  release feed such as Alkaline's own server) and updates it when a new one
+  is out, or builds a source checkout when its sources changed. It gives the
+  client Java 25 and the vanilla 1.8.9 jar for its assets, and passes the
+  version's memory, JVM arguments, wrapper and server to join. Settings →
+  Game shows the release and sets the feed or another folder.
 - **English, 简体中文 and 繁體中文**, following the system or picked in
   Settings → Appearance.
 - **Material 3 Expressive UI.** Page entries in a top bar or a wide
   navigation rail, split and connected button groups, wavy progress, morphing
   loading indicators, expressive shapes and motion, dynamic color from a seed
   color, the desktop wallpaper or the background picture, Google Sans Flex,
-  and an optional background picture with opacity and blur.
+  an optional background picture with opacity and blur, and one Corners
+  setting (square to round) for every surface and the window itself.
+- **Seasonal touches.** Bats on Halloween (Sulfur's birthday), snow at
+  Christmas, confetti for the New Year, the Lunar New Year and Minecraft's
+  birthday. They can be turned off in Settings → Appearance;
+  `SULFUR_DATE=2026-12-25` previews a day.
 - **A Launch page of your own.** Put the Play column on the left or right
   and add cards beside it: Minecraft news, the latest versions, notes, links
   or a Markdown page from a file or the web.

@@ -1,6 +1,7 @@
 package dev.sulfur.feature.download
 
 import androidx.compose.animation.AnimatedContent
+import dev.sulfur.ui.theme.Corners
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -153,7 +154,7 @@ internal fun ArchivePane(archive: ArchiveState, state: InstallState, viewModel: 
 @Composable
 private fun ArchiveRow(jar: ArchivedVersion, state: InstallState, onInstall: () -> Unit) {
     val category = Categories.firstOrNull { it.first == jar.category }?.second
-    Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(Modifier.fillMaxWidth(), shape = Corners.item, color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             ShapeIcon(painterResource(Res.drawable.ic_history_edu), MaterialShapes.Clover4Leaf, size = 32.dp)
             Spacer(Modifier.width(12.dp))
